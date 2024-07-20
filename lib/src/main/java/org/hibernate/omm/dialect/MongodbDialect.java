@@ -13,6 +13,10 @@ import org.hibernate.sql.exec.spi.JdbcOperation;
 
 public class MongodbDialect extends Dialect {
 
+	public MongodbDialect() {
+		super();
+	}
+
 	public MongodbDialect(DialectResolutionInfo dialectResolutionInfo) {
 		super(dialectResolutionInfo);
 	}
