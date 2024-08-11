@@ -3901,16 +3901,13 @@ public abstract class AbstractMongoSqlAstTranslator<T extends JdbcOperation> imp
         // If we have a query part for row numbering, there is no need to render the order by clause
         // as that is part of the row numbering window function already, by which we then order by in the outer query
         if (queryPartForRowNumbering == null) {
-            renderOrderBy(true, sortSpecifications);
+            renderOrderBy(sortSpecifications);
         }
     }
 
-    protected void renderOrderBy(boolean addWhitespace, List<SortSpecification> sortSpecifications) {
+    protected void renderOrderBy(List<SortSpecification> sortSpecifications) {
         if (sortSpecifications != null && !sortSpecifications.isEmpty()) {
-            if (addWhitespace) {
-                appendSql(WHITESPACE);
-            }
-            appendSql("order by ");
+            appendSql("{");
 
             clauseStack.push(Clause.ORDER);
             try {
@@ -3920,6 +3917,7 @@ public abstract class AbstractMongoSqlAstTranslator<T extends JdbcOperation> imp
                     visitSortSpecification(sortSpecification);
                     separator = COMMA_SEPARATOR;
                 }
+                appendSql("}");
             } finally {
                 clauseStack.pop();
             }
@@ -4333,10 +4331,11 @@ public abstract class AbstractMongoSqlAstTranslator<T extends JdbcOperation> imp
 
         renderSortExpression(sortExpression, ignoreCase);
 
+        appendSql(":");
         if (sortOrder == SortDirection.DESCENDING) {
-            appendSql(" desc");
-        } else if (sortOrder == SortDirection.ASCENDING && renderNullPrecedence && supportsNullPrecedence) {
-            appendSql(" asc");
+            appendSql("-1");
+        } else if (sortOrder == SortDirection.ASCENDING ) {
+            appendSql("1");
         }
 
         if (renderNullPrecedence && supportsNullPrecedence) {
@@ -5406,7 +5405,7 @@ public abstract class AbstractMongoSqlAstTranslator<T extends JdbcOperation> imp
             appendSql(" over(");
             visitPartitionByClause(partitionExpressions);
             if (!orderedSetAggregate) {
-                renderOrderBy(!partitionExpressions.isEmpty(), sortSpecifications);
+                renderOrderBy(sortSpecifications);
             }
             if (mode == FrameMode.RANGE && startKind == FrameKind.UNBOUNDED_PRECEDING && endKind == FrameKind.CURRENT_ROW && exclusion == FrameExclusion.NO_OTHERS) {
                 // This is the default, so we don't need to render anything
