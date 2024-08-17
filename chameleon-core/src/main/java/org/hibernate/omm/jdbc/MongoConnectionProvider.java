@@ -24,17 +24,25 @@ import com.mongodb.client.MongoDatabase;
 import com.mongodb.lang.NonNull;
 import com.mongodb.lang.Nullable;
 import org.bson.codecs.configuration.CodecRegistry;
+import org.checkerframework.checker.initialization.qual.Initialized;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
+import org.checkerframework.checker.nullness.qual.UnknownKeyFor;
+import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.engine.jdbc.connections.spi.ConnectionProvider;
 import org.hibernate.omm.cfg.MongoAvailableSettings;
 import org.hibernate.omm.exception.MongoConfigMissingException;
+import org.hibernate.omm.spi.MongoClientSettingsBuilderCustomizer;
+import org.hibernate.service.ServiceRegistry;
 import org.hibernate.service.UnknownUnwrapTypeException;
 import org.hibernate.service.spi.Configurable;
+import org.hibernate.service.spi.ServiceRegistryAwareService;
+import org.hibernate.service.spi.ServiceRegistryImplementor;
 import org.hibernate.service.spi.Stoppable;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -45,11 +53,13 @@ import static org.hibernate.internal.util.NullnessUtil.castNonNull;
  * @author Nathan Xu
  * @since 1.0.0
  */
-public class MongoConnectionProvider implements ConnectionProvider, Configurable, Stoppable {
+public class MongoConnectionProvider implements ConnectionProvider, Configurable, Stoppable, ServiceRegistryAwareService {
 
     private @MonotonicNonNull MongoDatabase mongoDatabase;
 
     private @MonotonicNonNull MongoClient mongoClient;
+
+    private @MonotonicNonNull ServiceRegistryImplementor serviceRegistry;
 
     @Override
     public void configure(final Map<String, Object> configurationValues) {
@@ -77,7 +87,11 @@ public class MongoConnectionProvider implements ConnectionProvider, Configurable
                 MongoClientSettings.getDefaultCodecRegistry()
         );
 
-        MongoClientSettings clientSettings = MongoClientSettings.builder()
+        var mongoClientSettingsBuilder = MongoClientSettings.builder();
+
+        customizeMongoClientSettingsBuilder(mongoClientSettingsBuilder);
+
+        MongoClientSettings clientSettings = mongoClientSettingsBuilder
                 .applyConnectionString(connectionString)
                 .codecRegistry(codecRegistry)
                 .build();
@@ -86,6 +100,12 @@ public class MongoConnectionProvider implements ConnectionProvider, Configurable
         // MongoConfigMissingException would have been thrown if mongodbDatabaseName is null
         mongoDatabase = mongoClient.getDatabase(castNonNull(mongodbDatabaseName));
 
+    }
+
+    private void customizeMongoClientSettingsBuilder(MongoClientSettings.Builder mongoClientSettingsBuilder) {
+        var classLoadService = serviceRegistry.requireService(ClassLoaderService.class);
+        var mongoClientSettingsBuilderCustomizers = classLoadService.loadJavaServices(MongoClientSettingsBuilderCustomizer.class);
+        mongoClientSettingsBuilderCustomizers.forEach(mongoClientSettingsBuilderCustomizer -> mongoClientSettingsBuilderCustomizer.customize(mongoClientSettingsBuilder));
     }
 
     @Override
@@ -134,4 +154,8 @@ public class MongoConnectionProvider implements ConnectionProvider, Configurable
         return mongoDatabase;
     }
 
+    @Override
+    public void injectServices(final ServiceRegistryImplementor serviceRegistry) {
+        this.serviceRegistry = serviceRegistry;
+    }
 }
