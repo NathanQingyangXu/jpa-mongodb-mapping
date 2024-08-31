@@ -20,12 +20,13 @@ import com.mongodb.client.ClientSession;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.lang.Nullable;
 import org.bson.Document;
-import org.hibernate.omm.type.array.MongoArray;
+import org.hibernate.omm.cfg.MongoReadWriteOptionsStrategy;
 import org.hibernate.omm.exception.NotYetImplementedException;
 import org.hibernate.omm.jdbc.adapter.ConnectionAdapter;
 import org.hibernate.omm.jdbc.exception.CommandRunFailSQLException;
 import org.hibernate.omm.jdbc.exception.SimulatedSQLException;
 import org.hibernate.omm.service.CommandRecorder;
+import org.hibernate.omm.type.array.MongoArray;
 
 import java.sql.Array;
 import java.sql.CallableStatement;
@@ -48,6 +49,9 @@ public class MongoConnection implements ConnectionAdapter {
     private final MongoDatabase mongoDatabase;
 
     @Nullable
+    private final MongoReadWriteOptionsStrategy mongoReadWriteOptionsStrategy;
+
+    @Nullable
     private final CommandRecorder commandRecorder;
 
     private boolean autoCommit;
@@ -56,23 +60,24 @@ public class MongoConnection implements ConnectionAdapter {
     @Nullable
     private SQLWarning sqlWarning;
 
-    public MongoConnection(final MongoDatabase mongoDatabase, final ClientSession clientSession, final CommandRecorder commandRecorder) {
+    public MongoConnection(final MongoDatabase mongoDatabase, final ClientSession clientSession,
+            @Nullable final MongoReadWriteOptionsStrategy mongoReadWriteOptionsStrategy, @Nullable final CommandRecorder commandRecorder) {
         Assertions.notNull("mongoDatabase", mongoDatabase);
         Assertions.notNull("clientSession", clientSession);
-        Assertions.notNull("commandRecorder", commandRecorder);
         this.clientSession = clientSession;
         this.mongoDatabase = mongoDatabase;
+        this.mongoReadWriteOptionsStrategy = mongoReadWriteOptionsStrategy;
         this.commandRecorder = commandRecorder;
     }
 
     @Override
     public Statement createStatement() {
-        return new MongoStatement(mongoDatabase, clientSession, this, commandRecorder);
+        return new MongoStatement(mongoDatabase, clientSession, this, mongoReadWriteOptionsStrategy, commandRecorder);
     }
 
     @Override
     public PreparedStatement prepareStatement(final String sql) {
-        return new MongoPreparedStatement(mongoDatabase, clientSession, this, commandRecorder, sql);
+        return new MongoPreparedStatement(mongoDatabase, clientSession, this, mongoReadWriteOptionsStrategy, commandRecorder, sql);
     }
 
     @Override
@@ -107,7 +112,7 @@ public class MongoConnection implements ConnectionAdapter {
     @Override
     public void setAutoCommit(final boolean autoCommit) {
         if (!autoCommit) {
-            this.clientSession.startTransaction();
+            startTransaction();
         }
         this.autoCommit = autoCommit;
     }
@@ -163,5 +168,16 @@ public class MongoConnection implements ConnectionAdapter {
     @Override
     public Array createArrayOf(final String typeName, final Object[] elements) {
         return new MongoArray(typeName, elements);
+    }
+
+    private void startTransaction() {
+        if (mongoReadWriteOptionsStrategy != null && mongoReadWriteOptionsStrategy.transactionOptions(this.clientSession) != null) {
+            final var transactionOptions = mongoReadWriteOptionsStrategy.transactionOptions(this.clientSession);
+            if (transactionOptions != null) {
+                this.clientSession.startTransaction(transactionOptions);
+                return;
+            }
+        }
+        this.clientSession.startTransaction();
     }
 }

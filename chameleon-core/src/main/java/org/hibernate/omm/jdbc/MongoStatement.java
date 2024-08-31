@@ -27,6 +27,7 @@ import org.bson.BsonDocument;
 import org.bson.BsonInt32;
 import org.bson.BsonValue;
 import org.hibernate.omm.ast.mql.QueryMQLTranslator;
+import org.hibernate.omm.cfg.MongoReadWriteOptionsStrategy;
 import org.hibernate.omm.jdbc.adapter.StatementAdapter;
 import org.hibernate.omm.jdbc.exception.NotSupportedSQLException;
 import org.hibernate.omm.jdbc.exception.SimulatedSQLException;
@@ -58,30 +59,33 @@ public class MongoStatement implements StatementAdapter {
     private boolean closed;
 
     @Nullable
+    private final MongoReadWriteOptionsStrategy mongoReadWriteOptionsStrategy;
+
+    @Nullable
     private final CommandRecorder commandRecorder;
 
     public MongoStatement(final MongoDatabase mongoDatabase, final ClientSession clientSession, final Connection connection,
-            @Nullable final CommandRecorder commandRecorder) {
+            @Nullable MongoReadWriteOptionsStrategy mongoReadWriteOptionsStrategy, @Nullable final CommandRecorder commandRecorder) {
         Assertions.notNull("mongoDatabase", mongoDatabase);
         Assertions.notNull("clientSession", clientSession);
         Assertions.notNull("connection", connection);
         this.mongoDatabase = mongoDatabase;
         this.clientSession = clientSession;
         this.connection = connection;
+        this.mongoReadWriteOptionsStrategy = mongoReadWriteOptionsStrategy;
         this.commandRecorder = commandRecorder;
     }
 
     @Override
-    public ResultSet executeQuery(final String sql) throws SimulatedSQLException {
-        Assertions.notNull("sql", sql);
-        throwExceptionIfClosed();
+    public ResultSet executeQuery(final String mql) throws SimulatedSQLException {
+        Assertions.notNull("mql", mql);
 
-        var command = BsonDocument.parse(sql);
-        replaceParameterMarkers(command);
-        logAndRecordCommand(command);
+        final var command = getCommand(mql);
 
-        var collection = mongoDatabase.getCollection(command.getString("aggregate").getValue(),
-                BsonDocument.class);
+        Assertions.assertTrue("aggregate".equals(command.getFirstKey()));
+
+        final var collection = getMongoCollection(command);
+
         var pipeline = command.getArray("pipeline").stream().map(BsonValue::asDocument).toList();
         var cursor = collection.aggregate(clientSession, pipeline).cursor();
         var fieldNames = getFieldNamesFromProjectDocument(pipeline.get(pipeline.size() - 1).asDocument().getDocument("$project"));
@@ -111,17 +115,14 @@ public class MongoStatement implements StatementAdapter {
     }
 
     @Override
-    public int executeUpdate(final String sql) throws SimulatedSQLException {
-        Assertions.notNull("sql", sql);
-        throwExceptionIfClosed();
-        BsonDocument command = BsonDocument.parse(sql);
+    public int executeUpdate(final String mql) throws SimulatedSQLException {
+        Assertions.notNull("mql", mql);
 
-        replaceParameterMarkers(command);
-        logAndRecordCommand(command);
+        final var command = getCommand(mql);
 
         String commandName = command.getFirstKey();
-        MongoCollection<BsonDocument> collection = mongoDatabase.getCollection(command.getString(commandName).getValue(),
-                BsonDocument.class);
+        MongoCollection<BsonDocument> collection = getMongoCollection(command);
+
         switch (commandName) {
             case "insert":
                 BsonDocument document = command.getArray("documents").get(0).asDocument();
@@ -155,23 +156,11 @@ public class MongoStatement implements StatementAdapter {
     protected void replaceParameterMarkers(final BsonDocument command) {
     }
 
-    private void logAndRecordCommand(final BsonDocument command) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug(command.toJson());
-        }
-        if (commandRecorder != null) {
-            commandRecorder.record(command);
-        }
-    }
-
     @Override
-    public boolean execute(final String sql) throws SimulatedSQLException {
-        Assertions.notNull("sql", sql);
-        throwExceptionIfClosed();
+    public boolean execute(final String mql) throws SimulatedSQLException {
+        Assertions.notNull("mql", mql);
 
-        var command = BsonDocument.parse(sql);
-        replaceParameterMarkers(command);
-        logAndRecordCommand(command);
+        final var command = getCommand(mql);
 
         var commandResult = mongoDatabase.runCommand(command);
         return commandResult.getDouble("ok") == 1.0;
@@ -270,7 +259,71 @@ public class MongoStatement implements StatementAdapter {
         }
     }
 
-    protected CommandRecorder getCommandRecorder() {
-        return commandRecorder;
+    protected MongoCollection<BsonDocument> getMongoCollection(final BsonDocument command) {
+        var collection = mongoDatabase.getCollection(command.getString(command.getFirstKey()).getValue(),
+                BsonDocument.class);
+
+        if (clientSession.hasActiveTransaction()) {
+            return collection;
+        }
+
+        if (mongoReadWriteOptionsStrategy != null) {
+
+            final var readPreference = mongoReadWriteOptionsStrategy.collectionReadPreference(collection);
+            if (readPreference != null) {
+                collection = collection.withReadPreference(readPreference);
+            }
+
+            final var readConcern = mongoReadWriteOptionsStrategy.collectionReadConcern(collection);
+            if (readConcern != null) {
+                collection = collection.withReadConcern(readConcern);
+            }
+
+            final var writeConcern = mongoReadWriteOptionsStrategy.collectionWriteConcern(collection);
+            if (writeConcern != null) {
+                collection = collection.withWriteConcern(writeConcern);
+            }
+        }
+        return collection;
+    }
+
+    private BsonDocument getCommand(final String mql) throws StatementClosedSQLException {
+        throwExceptionIfClosed();
+
+        final var command = BsonDocument.parse(mql);
+        replaceParameterMarkers(command);
+
+        addConcernsIfNeeded(command);
+
+        if (commandRecorder != null) {
+            commandRecorder.record(command);
+        }
+
+        if (LOG.isDebugEnabled()) {
+            LOG.debug(command.toJson());
+        }
+
+        return command;
+    }
+
+    private void addConcernsIfNeeded(final BsonDocument command) {
+        if (mongoReadWriteOptionsStrategy != null && !clientSession.hasActiveTransaction()) {
+
+            final var readConcernKey = "readConcern";
+            if (!command.containsKey(readConcernKey)) {
+                final var readConcern = mongoReadWriteOptionsStrategy.readConcern(command);
+                if (readConcern != null) {
+                    command.put(readConcernKey, readConcern.asDocument());
+                }
+            }
+
+            final var writeConcernKey = "writeConcern";
+            if (!command.containsKey(writeConcernKey)) {
+                final var writeConcern = mongoReadWriteOptionsStrategy.writeConcern(command);
+                if (writeConcern != null) {
+                    command.put(writeConcernKey, writeConcern.asDocument());
+                }
+            }
+        }
     }
 }

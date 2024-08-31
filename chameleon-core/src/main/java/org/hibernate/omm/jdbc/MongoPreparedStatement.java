@@ -24,6 +24,7 @@ import org.bson.BsonObjectId;
 import org.bson.BsonType;
 import org.bson.BsonValue;
 import org.bson.types.ObjectId;
+import org.hibernate.omm.cfg.MongoReadWriteOptionsStrategy;
 import org.hibernate.omm.exception.NotYetImplementedException;
 import org.hibernate.omm.jdbc.adapter.PreparedStatementAdapter;
 import org.hibernate.omm.jdbc.exception.NotSupportedSQLException;
@@ -70,9 +71,10 @@ public class MongoPreparedStatement extends MongoStatement
             final MongoDatabase mongoDatabase,
             final ClientSession clientSession,
             final Connection connection,
+            @Nullable final MongoReadWriteOptionsStrategy mongoReadWriteOptionsStrategy,
             @Nullable final CommandRecorder commandRecorder,
             final String parameterizedCommandJson) {
-        super(mongoDatabase, clientSession, connection, commandRecorder);
+        super(mongoDatabase, clientSession, connection, mongoReadWriteOptionsStrategy, commandRecorder);
         this.parameterizedCommandJson = parameterizedCommandJson;
         this.parameters = new HashMap<>();
     }

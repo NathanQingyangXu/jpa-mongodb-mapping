@@ -24,20 +24,24 @@ package org.hibernate.omm.cfg;
  * @since 1.0.0
  */
 public enum MongoAvailableSettings {
-    MONGODB_CONNECTION_URL("mongodb.connection.url"),
-    MONGODB_DATABASE("mongodb.database");
+    MONGODB_CONNECTION_URL("mongodb.connection.url", true),
+    MONGODB_DATABASE("mongodb.database", true),
+    MONGODB_READ_WRITE_OPTIONS_STRATEGY_CLASS("mongodb.read_write_options_strategy.class", false);
 
     private final String configuration;
-    MongoAvailableSettings(final String configuration) {
+    private final boolean mandatory;
+
+    MongoAvailableSettings(final String configuration, final boolean mandatory) {
         this.configuration = configuration;
+        this.mandatory = mandatory;
     }
 
     public String getConfiguration() {
         return configuration;
     }
 
-    @Override
-    public String toString() {
-        return configuration;
+    public boolean isMandatory() {
+        return mandatory;
     }
+
 }
