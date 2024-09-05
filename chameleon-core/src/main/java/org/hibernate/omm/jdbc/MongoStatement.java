@@ -31,7 +31,6 @@ import org.hibernate.omm.jdbc.adapter.StatementAdapter;
 import org.hibernate.omm.jdbc.exception.NotSupportedSQLException;
 import org.hibernate.omm.jdbc.exception.SimulatedSQLException;
 import org.hibernate.omm.jdbc.exception.StatementClosedSQLException;
-import org.hibernate.omm.service.CommandRecorder;
 import org.hibernate.sql.ast.tree.select.SelectClause;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,18 +56,14 @@ public class MongoStatement implements StatementAdapter {
 
     private boolean closed;
 
-    @Nullable
-    private final CommandRecorder commandRecorder;
 
-    public MongoStatement(final MongoDatabase mongoDatabase, final ClientSession clientSession, final Connection connection,
-            @Nullable final CommandRecorder commandRecorder) {
+    public MongoStatement(final MongoDatabase mongoDatabase, final ClientSession clientSession, final Connection connection) {
         Assertions.notNull("mongoDatabase", mongoDatabase);
         Assertions.notNull("clientSession", clientSession);
         Assertions.notNull("connection", connection);
         this.mongoDatabase = mongoDatabase;
         this.clientSession = clientSession;
         this.connection = connection;
-        this.commandRecorder = commandRecorder;
     }
 
     @Override
@@ -159,8 +154,8 @@ public class MongoStatement implements StatementAdapter {
         if (LOG.isDebugEnabled()) {
             LOG.debug(command.toJson());
         }
-        if (commandRecorder != null) {
-            commandRecorder.record(command);
+        if (MongoDriver.commandRecorder != null) {
+            MongoDriver.commandRecorder.record(command);
         }
     }
 
@@ -270,7 +265,4 @@ public class MongoStatement implements StatementAdapter {
         }
     }
 
-    protected CommandRecorder getCommandRecorder() {
-        return commandRecorder;
-    }
 }

@@ -47,32 +47,27 @@ public class MongoConnection implements ConnectionAdapter {
     private final ClientSession clientSession;
     private final MongoDatabase mongoDatabase;
 
-    @Nullable
-    private final CommandRecorder commandRecorder;
-
     private boolean autoCommit;
     private boolean closed;
 
     @Nullable
     private SQLWarning sqlWarning;
 
-    public MongoConnection(final MongoDatabase mongoDatabase, final ClientSession clientSession, final CommandRecorder commandRecorder) {
+    public MongoConnection(final MongoDatabase mongoDatabase, final ClientSession clientSession) {
         Assertions.notNull("mongoDatabase", mongoDatabase);
         Assertions.notNull("clientSession", clientSession);
-        Assertions.notNull("commandRecorder", commandRecorder);
         this.clientSession = clientSession;
         this.mongoDatabase = mongoDatabase;
-        this.commandRecorder = commandRecorder;
     }
 
     @Override
     public Statement createStatement() {
-        return new MongoStatement(mongoDatabase, clientSession, this, commandRecorder);
+        return new MongoStatement(mongoDatabase, clientSession, this);
     }
 
     @Override
     public PreparedStatement prepareStatement(final String sql) {
-        return new MongoPreparedStatement(mongoDatabase, clientSession, this, commandRecorder, sql);
+        return new MongoPreparedStatement(mongoDatabase, clientSession, this, sql);
     }
 
     @Override
@@ -106,7 +101,7 @@ public class MongoConnection implements ConnectionAdapter {
 
     @Override
     public void setAutoCommit(final boolean autoCommit) {
-        if (!autoCommit) {
+        if (!autoCommit && !this.clientSession.hasActiveTransaction()) {
             this.clientSession.startTransaction();
         }
         this.autoCommit = autoCommit;

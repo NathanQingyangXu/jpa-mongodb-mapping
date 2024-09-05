@@ -41,7 +41,8 @@ import org.hibernate.omm.annotation.InterfaceAdapters;
                 @InterfaceAdapter(interfaceName = "java.sql.DatabaseMetaData", adapterClassName = "org.hibernate.omm.jdbc.adapter" +
                         ".DatabaseMetaDataAdapter"),
                 @InterfaceAdapter(interfaceName = "java.sql.ResultSetMetaData", adapterClassName = "org.hibernate.omm.jdbc.adapter" +
-                        ".ResultSetMetaDataAdapter")
+                        ".ResultSetMetaDataAdapter"),
+                @InterfaceAdapter(interfaceName = "java.sql.Driver", adapterClassName = "org.hibernate.omm.jdbc.adapter.DriverAdapter")
 
         }
 )

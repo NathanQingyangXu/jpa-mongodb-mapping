@@ -3,11 +3,10 @@ package org.hibernate.omm.extension;
 import com.mongodb.client.MongoDatabase;
 import jakarta.persistence.Entity;
 import org.hibernate.SessionFactory;
+import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.Configuration;
-import org.hibernate.engine.jdbc.connections.spi.ConnectionProvider;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.omm.cfg.MongoAvailableSettings;
-import org.hibernate.omm.jdbc.MongoConnectionProvider;
+import org.hibernate.omm.jdbc.MongoDriver;
 import org.hibernate.omm.service.CommandRecorder;
 import org.hibernate.omm.service.DefaultCommandRecorderImpl;
 import org.junit.jupiter.api.extension.AfterAllCallback;
@@ -49,7 +48,7 @@ import static org.junit.platform.commons.support.AnnotationSupport.findAnnotated
  */
 class ChameleonExtension implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback {
 
-    private static final String MONGODB_DOCKER_IMAGE_NAME = "mongo:5.0.28";
+    private static final String MONGODB_DOCKER_IMAGE_NAME = "mongo:7.0.14";
     private static final String DATABASE_NAME = "test";
 
     private MongoDBContainer mongoDBContainer;
@@ -77,22 +76,19 @@ class ChameleonExtension implements BeforeAllCallback, AfterAllCallback, BeforeE
 
         final var cfg = new Configuration();
 
-        cfg.setProperty(MongoAvailableSettings.MONGODB_CONNECTION_URL.getConfiguration(), mongoDBContainer.getConnectionString())
-           .setProperty(MongoAvailableSettings.MONGODB_DATABASE.getConfiguration(), DATABASE_NAME);
+        final var url = mongoDBContainer.getConnectionString() + "/" + DATABASE_NAME;
+        cfg.setProperty(AvailableSettings.JAKARTA_JDBC_URL, url);
         annotatedClasses.forEach(cfg::addAnnotatedClass);
 
         var standardServiceRegistryBuilder = cfg.getStandardServiceRegistryBuilder();
         standardServiceRegistryBuilder.addService(CommandRecorder.class, DefaultCommandRecorderImpl.INSTANCE);
 
-        Arrays.stream(mongoIntegrationTestAnnotation.hibernateProperties()).forEach(prop -> {
-            cfg.setProperty(prop.key(), prop.value());
-        });
+        Arrays.stream(mongoIntegrationTestAnnotation.hibernateProperties()).forEach(prop -> cfg.setProperty(prop.key(), prop.value()));
+
+        mongoDatabase = MongoDriver.getMongoDatabase(url);
+        MongoDriver.commandRecorder = DefaultCommandRecorderImpl.INSTANCE;
 
         sessionFactory = (SessionFactoryImplementor) cfg.buildSessionFactory();
-        final var mongoConnectionProvider =
-                (MongoConnectionProvider) sessionFactory.getServiceRegistry().getService(ConnectionProvider.class);
-        assert mongoConnectionProvider != null;
-        mongoDatabase = mongoConnectionProvider.getMongoDatabase();
 
         injectStaticFields(testClass, SessionFactoryInjected.class, SessionFactory.class, sessionFactory);
         injectStaticFields(testClass, MongoDatabaseInjected.class, MongoDatabase.class, mongoDatabase);
@@ -120,9 +116,9 @@ class ChameleonExtension implements BeforeAllCallback, AfterAllCallback, BeforeE
 
     @Override
     public void beforeEach(final ExtensionContext context) {
-        try (var collectionNameIter = mongoDatabase.listCollectionNames().iterator()) {
-            while (collectionNameIter.hasNext()) {
-                mongoDatabase.getCollection(collectionNameIter.next()).drop();
+        try (var collectionNameIterator = mongoDatabase.listCollectionNames().iterator()) {
+            while (collectionNameIterator.hasNext()) {
+                mongoDatabase.getCollection(collectionNameIterator.next()).drop();
             }
         }
 
@@ -170,7 +166,7 @@ class ChameleonExtension implements BeforeAllCallback, AfterAllCallback, BeforeE
     }
 
     @Override
-    public void afterEach(final ExtensionContext extensionContext) throws Exception {
+    public void afterEach(final ExtensionContext extensionContext) {
         DefaultCommandRecorderImpl.INSTANCE.clearCommandsRecorded();
     }
 }

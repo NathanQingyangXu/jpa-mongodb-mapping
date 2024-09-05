@@ -130,7 +130,7 @@ public class InterfaceAdaptersProcessor extends AbstractProcessor {
         if (componentType == null) {
             return clazz.getName().replace('$', '.'); // inner class name
         } else {
-            return componentType.getSimpleName() + "[]";
+            return componentType.getCanonicalName() + "[]";
         }
     }
 }
