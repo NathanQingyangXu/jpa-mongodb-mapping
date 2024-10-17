@@ -20,6 +20,7 @@ import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.engine.jdbc.connections.spi.ConnectionProvider;
 import org.hibernate.omm.service.CommandRecorder;
+import org.hibernate.omm.service.MongoClientSettingsCustomizer;
 import org.hibernate.service.UnknownUnwrapTypeException;
 import org.hibernate.service.spi.Configurable;
 import org.hibernate.service.spi.ServiceRegistryAwareService;
@@ -51,11 +52,15 @@ public class MongoConnectionProvider
     ConnectionString connectionString = new ConnectionString(mongoConnectionURL);
     CodecRegistry codecRegistry = fromRegistries(MongoClientSettings.getDefaultCodecRegistry());
 
-    MongoClientSettings clientSettings = MongoClientSettings.builder()
+    MongoClientSettings.Builder builder = MongoClientSettings.builder()
         .applyConnectionString(connectionString)
-        .codecRegistry(codecRegistry)
-        .build();
-    mongoClient = MongoClients.create(clientSettings);
+        .codecRegistry(codecRegistry);
+
+    MongoClientSettingsCustomizer mongoClientSettingsCustomizer = serviceRegistry.getService(MongoClientSettingsCustomizer.class);
+    if (mongoClientSettingsCustomizer != null) {
+      mongoClientSettingsCustomizer.contribute(builder);
+    }
+    mongoClient = MongoClients.create(builder.build());
 
     mongoDatabase =
         mongoClient.getDatabase(Assertions.assertNotNull(extractMongoDatabase(mongoConnectionURL)));
