@@ -16,4 +16,5 @@ include ':chameleon-core'
 include ':chameleon-testing'
 include ':chameleon-annotation-processor'
 include ':hibernate-overlay'
+include 'Chameleon-usage-examples'
 

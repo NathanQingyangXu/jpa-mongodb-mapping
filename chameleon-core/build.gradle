@@ -22,13 +22,14 @@ dependencies {
 
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
-    implementation libs.mongodb.sync.java.driver, libs.sl4j.api, libs.spotbugs.annotations
+    implementation libs.sl4j.api, libs.spotbugs.annotations
 
     annotationProcessor project(':chameleon-annotation-processor')
     implementation project(':chameleon-annotation-processor')
 
     //implementation project(':hibernate-overlay')
-    implementation libs.hibernate.orm.core
+    api libs.hibernate.orm.core
+    api libs.mongodb.sync.java.driver
 
     // JPA Metamodel Generator (used in JPA Criteria)
     annotationProcessor libs.hibernate.jpamodelgen
