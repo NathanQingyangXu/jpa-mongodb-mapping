@@ -22,15 +22,15 @@ import org.hibernate.omm.translate.translator.mongoast.AstNodeType;
 import org.hibernate.omm.translate.translator.mongoast.expressions.AstExpression;
 
 public record AstProjectStageSetFieldSpecification(String path, AstExpression value)
-    implements AstProjectStageSpecification {
-  @Override
-  public AstNodeType nodeType() {
-    return AstNodeType.ProjectStageSetFieldSpecification;
-  }
+        implements AstProjectStageSpecification {
+    @Override
+    public AstNodeType nodeType() {
+        return AstNodeType.ProjectStageSetFieldSpecification;
+    }
 
-  @Override
-  public void render(final BsonWriter writer) {
-    writer.writeName(path);
-    value.render(writer);
-  }
+    @Override
+    public void render(final BsonWriter writer) {
+        writer.writeName(path);
+        value.render(writer);
+    }
 }

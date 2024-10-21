@@ -9,13 +9,13 @@ import java.sql.SQLException;
  */
 public class SimulatedSQLException extends SQLException {
 
-  public SimulatedSQLException() {}
+    public SimulatedSQLException() {}
 
-  public SimulatedSQLException(@Nullable final String reason) {
-    super(reason);
-  }
+    public SimulatedSQLException(@Nullable final String reason) {
+        super(reason);
+    }
 
-  public SimulatedSQLException(@Nullable final String reason, final Throwable cause) {
-    super(reason, cause);
-  }
+    public SimulatedSQLException(@Nullable final String reason, final Throwable cause) {
+        super(reason, cause);
+    }
 }

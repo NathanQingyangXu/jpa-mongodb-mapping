@@ -34,24 +34,24 @@ import org.junit.jupiter.api.Test;
 @MongoIntegrationTest
 class NativeQueryTests {
 
-  @SessionFactoryInjected
-  static SessionFactory sessionFactory;
+    @SessionFactoryInjected
+    static SessionFactory sessionFactory;
 
-  @Test
-  @Disabled("the testing will succeed only if we enable 'hibernate-overlay' project dependency")
-  void test_with_parameter() {
-    var insertedBook = sessionFactory.fromTransaction(session -> {
-      var book = new Book();
-      book.id = 1234L;
-      book.title = "War and Peace";
-      book.author = "Leo Tolstoy";
-      book.publishYear = 1869;
-      session.persist(book);
-      return book;
-    });
+    @Test
+    @Disabled("the testing will succeed only if we enable 'hibernate-overlay' project dependency")
+    void test_with_parameter() {
+        var insertedBook = sessionFactory.fromTransaction(session -> {
+            var book = new Book();
+            book.id = 1234L;
+            book.title = "War and Peace";
+            book.author = "Leo Tolstoy";
+            book.publishYear = 1869;
+            session.persist(book);
+            return book;
+        });
 
-    var nativeQuery =
-        """
+        var nativeQuery =
+                """
                 {
                     aggregate: "books",
                     pipeline: [
@@ -60,48 +60,46 @@ class NativeQueryTests {
                     ]
                 }
                 """;
-    sessionFactory.inTransaction(session -> {
-      var query =
-          session.createNativeQuery(nativeQuery, Book.class).setParameter(1, insertedBook.id);
-      var book = query.getSingleResult();
-      assertThat(book).usingRecursiveComparison().isEqualTo(insertedBook);
-    });
-  }
+        sessionFactory.inTransaction(session -> {
+            var query = session.createNativeQuery(nativeQuery, Book.class).setParameter(1, insertedBook.id);
+            var book = query.getSingleResult();
+            assertThat(book).usingRecursiveComparison().isEqualTo(insertedBook);
+        });
+    }
 
-  @Test
-  void test_without_parameter() {
-    var insertedBook = sessionFactory.fromTransaction(session -> {
-      var book = new Book();
-      book.id = 1234L;
-      book.title = "War and Peace";
-      book.author = "Leo Tolstoy";
-      book.publishYear = 1869;
-      session.persist(book);
-      return book;
-    });
+    @Test
+    void test_without_parameter() {
+        var insertedBook = sessionFactory.fromTransaction(session -> {
+            var book = new Book();
+            book.id = 1234L;
+            book.title = "War and Peace";
+            book.author = "Leo Tolstoy";
+            book.publishYear = 1869;
+            session.persist(book);
+            return book;
+        });
 
-    var nativeQuery =
-        "{ aggregate: \"books\", pipeline: [" + "{ $match :  { _id: { $eq: 1234 } } }, "
-            + "{ $project: { _id: 1, publishYear: 1, title: 1, author: 1 } }"
-            + "] }";
-    sessionFactory.inTransaction(session -> {
-      var query = session.createNativeQuery(nativeQuery, Book.class);
-      var book = query.getSingleResult();
-      assertThat(book).usingRecursiveComparison().isEqualTo(insertedBook);
-    });
-  }
+        var nativeQuery = "{ aggregate: \"books\", pipeline: [" + "{ $match :  { _id: { $eq: 1234 } } }, "
+                + "{ $project: { _id: 1, publishYear: 1, title: 1, author: 1 } }"
+                + "] }";
+        sessionFactory.inTransaction(session -> {
+            var query = session.createNativeQuery(nativeQuery, Book.class);
+            var book = query.getSingleResult();
+            assertThat(book).usingRecursiveComparison().isEqualTo(insertedBook);
+        });
+    }
 
-  @Entity(name = "Book")
-  @Table(name = "books")
-  static class Book {
+    @Entity(name = "Book")
+    @Table(name = "books")
+    static class Book {
 
-    @Id
-    Long id;
+        @Id
+        Long id;
 
-    String title;
+        String title;
 
-    String author;
+        String author;
 
-    int publishYear;
-  }
+        int publishYear;
+    }
 }

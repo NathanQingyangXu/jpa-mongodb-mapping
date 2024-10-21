@@ -39,56 +39,55 @@ import org.junit.jupiter.api.Test;
 @MongoIntegrationTest
 class FormulaTests {
 
-  @SessionFactoryInjected
-  SessionFactory sessionFactory;
+    @SessionFactoryInjected
+    SessionFactory sessionFactory;
 
-  @MongoDatabaseInjected
-  MongoDatabase mongoDatabase;
+    @MongoDatabaseInjected
+    MongoDatabase mongoDatabase;
 
-  @Test
-  @DisplayName(
-      "entity field annotated with @Formula will be computed based on provided Mongo aggregate expression")
-  void test() {
-    var id = 1234L;
-    var credit = 200.0;
-    var rate = 0.01;
-    sessionFactory.inTransaction(session -> {
-      var account = new Account(id);
-      account.credit = credit;
-      account.rate = rate;
-      session.persist(account);
-    });
+    @Test
+    @DisplayName("entity field annotated with @Formula will be computed based on provided Mongo aggregate expression")
+    void test() {
+        var id = 1234L;
+        var credit = 200.0;
+        var rate = 0.01;
+        sessionFactory.inTransaction(session -> {
+            var account = new Account(id);
+            account.credit = credit;
+            account.rate = rate;
+            session.persist(account);
+        });
 
-    var doc = mongoDatabase.getCollection("accounts").find(Filters.eq(id)).first();
+        var doc = mongoDatabase.getCollection("accounts").find(Filters.eq(id)).first();
 
-    assertThat(doc).isNotNull();
-    assertThat(doc.keySet()).doesNotContain("interest");
+        assertThat(doc).isNotNull();
+        assertThat(doc.keySet()).doesNotContain("interest");
 
-    sessionFactory.inTransaction(session -> {
-      var loadedAccount = new Account();
-      session.load(loadedAccount, id);
-      assertThat(loadedAccount.interest).isEqualTo(credit * rate);
-    });
-  }
-
-  @Entity(name = "Account")
-  @Table(name = "accounts")
-  static class Account {
-
-    @Id
-    Long id;
-
-    Double credit;
-
-    Double rate;
-
-    @Formula("{ $multiply: [ \"$credit\", \"$rate\" ] }")
-    Double interest;
-
-    Account() {}
-
-    Account(Long id) {
-      this.id = id;
+        sessionFactory.inTransaction(session -> {
+            var loadedAccount = new Account();
+            session.load(loadedAccount, id);
+            assertThat(loadedAccount.interest).isEqualTo(credit * rate);
+        });
     }
-  }
+
+    @Entity(name = "Account")
+    @Table(name = "accounts")
+    static class Account {
+
+        @Id
+        Long id;
+
+        Double credit;
+
+        Double rate;
+
+        @Formula("{ $multiply: [ \"$credit\", \"$rate\" ] }")
+        Double interest;
+
+        Account() {}
+
+        Account(Long id) {
+            this.id = id;
+        }
+    }
 }

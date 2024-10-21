@@ -9,13 +9,13 @@ import java.util.Collection;
  */
 public final class CollectionUtil {
 
-  private CollectionUtil() {}
+    private CollectionUtil() {}
 
-  public static boolean isEmpty(@Nullable final Collection<?> collection) {
-    return collection == null || collection.isEmpty();
-  }
+    public static boolean isEmpty(@Nullable final Collection<?> collection) {
+        return collection == null || collection.isEmpty();
+    }
 
-  public static boolean isNotEmpty(@Nullable final Collection<?> collection) {
-    return collection != null && !collection.isEmpty();
-  }
+    public static boolean isNotEmpty(@Nullable final Collection<?> collection) {
+        return collection != null && !collection.isEmpty();
+    }
 }

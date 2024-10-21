@@ -30,22 +30,22 @@ import java.util.UUID;
  */
 @Entity(name = "Book")
 @Table(
-    name = "books",
-    indexes = {
-      @Index(name = "idx_on_single_col", columnList = "publishYear"),
-      @Index(name = "idx_on_multi_cols", columnList = "publisher,author"),
-      @Index(name = "uniq_idx_on_single_col", columnList = "isbn", unique = true),
-      @Index(name = "uniq_idx_on_multi_cols", columnList = "publisher,title", unique = true)
-    })
+        name = "books",
+        indexes = {
+            @Index(name = "idx_on_single_col", columnList = "publishYear"),
+            @Index(name = "idx_on_multi_cols", columnList = "publisher,author"),
+            @Index(name = "uniq_idx_on_single_col", columnList = "isbn", unique = true),
+            @Index(name = "uniq_idx_on_multi_cols", columnList = "publisher,title", unique = true)
+        })
 class Book {
 
-  @Id
-  @GeneratedValue
-  UUID id;
+    @Id
+    @GeneratedValue
+    UUID id;
 
-  String isbn;
-  String author;
-  String title;
-  String publisher;
-  int publishYear;
+    String isbn;
+    String author;
+    String title;
+    String publisher;
+    int publishYear;
 }

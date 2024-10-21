@@ -22,18 +22,18 @@ import org.hibernate.omm.translate.translator.mongoast.AstNodeType;
 import org.hibernate.omm.translate.translator.mongoast.filters.AstFilter;
 
 public record AstMatchStage(AstFilter filter) implements AstStage {
-  @Override
-  public AstNodeType nodeType() {
-    return AstNodeType.MatchStage;
-  }
+    @Override
+    public AstNodeType nodeType() {
+        return AstNodeType.MatchStage;
+    }
 
-  @Override
-  public void render(final BsonWriter writer) {
-    writer.writeStartDocument();
-    writer.writeName("$match");
+    @Override
+    public void render(final BsonWriter writer) {
+        writer.writeStartDocument();
+        writer.writeName("$match");
 
-    filter.render(writer);
+        filter.render(writer);
 
-    writer.writeEndDocument();
-  }
+        writer.writeEndDocument();
+    }
 }

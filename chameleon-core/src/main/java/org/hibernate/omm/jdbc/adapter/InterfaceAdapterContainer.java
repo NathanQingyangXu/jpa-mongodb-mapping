@@ -25,27 +25,27 @@ import org.hibernate.omm.annotation.JdbcInterfaceAdapters;
  * @since 1.0.0
  */
 @JdbcInterfaceAdapters({
-  @JdbcInterfaceAdapter(
-      interfaceName = "java.sql.Statement",
-      adapterClassName = "org.hibernate.omm.jdbc.adapter" + ".StatementAdapter"),
-  @JdbcInterfaceAdapter(
-      interfaceName = "java.sql.ResultSet",
-      adapterClassName = "org.hibernate.omm.jdbc.adapter" + ".ResultSetAdapter"),
-  @JdbcInterfaceAdapter(
-      interfaceName = "java.sql.PreparedStatement",
-      adapterClassName = "org.hibernate.omm.jdbc.adapter" + ".PreparedStatementAdapter",
-      overrideDeclaredMethodsOnly = true),
-  @JdbcInterfaceAdapter(
-      interfaceName = "java.sql.Array",
-      adapterClassName = "org.hibernate.omm.jdbc.adapter.ArrayAdapter"),
-  @JdbcInterfaceAdapter(
-      interfaceName = "java.sql.Connection",
-      adapterClassName = "org.hibernate.omm.jdbc.adapter" + ".ConnectionAdapter"),
-  @JdbcInterfaceAdapter(
-      interfaceName = "java.sql.DatabaseMetaData",
-      adapterClassName = "org.hibernate.omm.jdbc.adapter" + ".DatabaseMetaDataAdapter"),
-  @JdbcInterfaceAdapter(
-      interfaceName = "java.sql.ResultSetMetaData",
-      adapterClassName = "org.hibernate.omm.jdbc.adapter" + ".ResultSetMetaDataAdapter")
+    @JdbcInterfaceAdapter(
+            interfaceName = "java.sql.Statement",
+            adapterClassName = "org.hibernate.omm.jdbc.adapter" + ".StatementAdapter"),
+    @JdbcInterfaceAdapter(
+            interfaceName = "java.sql.ResultSet",
+            adapterClassName = "org.hibernate.omm.jdbc.adapter" + ".ResultSetAdapter"),
+    @JdbcInterfaceAdapter(
+            interfaceName = "java.sql.PreparedStatement",
+            adapterClassName = "org.hibernate.omm.jdbc.adapter" + ".PreparedStatementAdapter",
+            overrideDeclaredMethodsOnly = true),
+    @JdbcInterfaceAdapter(
+            interfaceName = "java.sql.Array",
+            adapterClassName = "org.hibernate.omm.jdbc.adapter.ArrayAdapter"),
+    @JdbcInterfaceAdapter(
+            interfaceName = "java.sql.Connection",
+            adapterClassName = "org.hibernate.omm.jdbc.adapter" + ".ConnectionAdapter"),
+    @JdbcInterfaceAdapter(
+            interfaceName = "java.sql.DatabaseMetaData",
+            adapterClassName = "org.hibernate.omm.jdbc.adapter" + ".DatabaseMetaDataAdapter"),
+    @JdbcInterfaceAdapter(
+            interfaceName = "java.sql.ResultSetMetaData",
+            adapterClassName = "org.hibernate.omm.jdbc.adapter" + ".ResultSetMetaDataAdapter")
 })
 public interface InterfaceAdapterContainer {}

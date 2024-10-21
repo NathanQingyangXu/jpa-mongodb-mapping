@@ -20,7 +20,7 @@ package org.hibernate.omm.translate.translator.mongoast;
 import org.bson.BsonWriter;
 
 public interface AstNode {
-  AstNodeType nodeType();
+    AstNodeType nodeType();
 
-  void render(BsonWriter writer);
+    void render(BsonWriter writer);
 }

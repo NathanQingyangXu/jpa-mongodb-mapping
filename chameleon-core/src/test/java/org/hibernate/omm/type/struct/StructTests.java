@@ -42,77 +42,78 @@ import org.junit.jupiter.api.Test;
 @MongoIntegrationTest
 class StructTests {
 
-  @SessionFactoryInjected
-  SessionFactory sessionFactory;
+    @SessionFactoryInjected
+    SessionFactory sessionFactory;
 
-  @CommandRecorderInjected
-  CommandRecorder commandRecorder;
+    @CommandRecorderInjected
+    CommandRecorder commandRecorder;
 
-  @Test
-  void test_persist() {
-    var tagsByAuthor = new TagsByAuthor();
-    tagsByAuthor.author = "Nathan";
-    tagsByAuthor.tags = List.of("comedy", "drama");
-    var movie = new Movie();
-    movie.id = 1;
-    movie.title = "Forrest Gump";
-    movie.tagsByAuthorList = new TagsByAuthor[] {tagsByAuthor};
-    sessionFactory.inTransaction(session -> session.persist(movie));
-    assertThat(commandRecorder.getCommandsRecorded()).singleElement().satisfies(command -> {
-      assertThat(command.getFirstKey()).isEqualTo("insert");
-      assertThat(command.getString(command.getFirstKey()).getValue()).isEqualTo("movies");
-      assertThat(command.getArray("documents").getValues()).singleElement().satisfies(document -> {
-        final var expectedJson =
-            """
+    @Test
+    void test_persist() {
+        var tagsByAuthor = new TagsByAuthor();
+        tagsByAuthor.author = "Nathan";
+        tagsByAuthor.tags = List.of("comedy", "drama");
+        var movie = new Movie();
+        movie.id = 1;
+        movie.title = "Forrest Gump";
+        movie.tagsByAuthorList = new TagsByAuthor[] {tagsByAuthor};
+        sessionFactory.inTransaction(session -> session.persist(movie));
+        assertThat(commandRecorder.getCommandsRecorded()).singleElement().satisfies(command -> {
+            assertThat(command.getFirstKey()).isEqualTo("insert");
+            assertThat(command.getString(command.getFirstKey()).getValue()).isEqualTo("movies");
+            assertThat(command.getArray("documents").getValues())
+                    .singleElement()
+                    .satisfies(document -> {
+                        final var expectedJson =
+                                """
                                         {"tagsByAuthorList": [{"commenter": "Nathan", "tags": ["comedy", "drama"]}], "title": "Forrest Gump", "_id": 1}
                                         """;
-        assertThat(document).isEqualTo(BsonDocument.parse(expectedJson));
-      });
-    });
-  }
-
-  @Test
-  void test_query() {
-    var tagsByAuthor = new TagsByAuthor();
-    tagsByAuthor.author = "Nathan";
-    tagsByAuthor.tags = List.of("comedy", "drama");
-    var movie = new Movie();
-    movie.id = 1;
-    movie.title = "Forrest Gump";
-    movie.tagsByAuthorList = new TagsByAuthor[] {tagsByAuthor};
-    sessionFactory.inTransaction(session -> session.persist(movie));
-    sessionFactory.inTransaction(session -> {
-      final var fetchedMovie = session
-          .createQuery("from Movie where id = :id", Movie.class)
-          .setParameter("id", 1)
-          .getSingleResult();
-      assertThat(fetchedMovie).usingRecursiveComparison().isEqualTo(movie);
-    });
-  }
-
-  @Entity(name = "Movie")
-  @Table(name = "movies")
-  static class Movie {
-    @Id
-    int id;
-
-    String title;
-
-    TagsByAuthor[] tagsByAuthorList;
-  }
-
-  @Embeddable
-  @Struct(name = "TagsByAuthor")
-  static class TagsByAuthor {
-
-    @Column(name = "commenter")
-    String author;
-
-    List<String> tags;
-
-    @Override
-    public String toString() {
-      return "TagsByAuthor{" + "author='" + author + '\'' + ", tags=" + tags + '}';
+                        assertThat(document).isEqualTo(BsonDocument.parse(expectedJson));
+                    });
+        });
     }
-  }
+
+    @Test
+    void test_query() {
+        var tagsByAuthor = new TagsByAuthor();
+        tagsByAuthor.author = "Nathan";
+        tagsByAuthor.tags = List.of("comedy", "drama");
+        var movie = new Movie();
+        movie.id = 1;
+        movie.title = "Forrest Gump";
+        movie.tagsByAuthorList = new TagsByAuthor[] {tagsByAuthor};
+        sessionFactory.inTransaction(session -> session.persist(movie));
+        sessionFactory.inTransaction(session -> {
+            final var fetchedMovie = session.createQuery("from Movie where id = :id", Movie.class)
+                    .setParameter("id", 1)
+                    .getSingleResult();
+            assertThat(fetchedMovie).usingRecursiveComparison().isEqualTo(movie);
+        });
+    }
+
+    @Entity(name = "Movie")
+    @Table(name = "movies")
+    static class Movie {
+        @Id
+        int id;
+
+        String title;
+
+        TagsByAuthor[] tagsByAuthorList;
+    }
+
+    @Embeddable
+    @Struct(name = "TagsByAuthor")
+    static class TagsByAuthor {
+
+        @Column(name = "commenter")
+        String author;
+
+        List<String> tags;
+
+        @Override
+        public String toString() {
+            return "TagsByAuthor{" + "author='" + author + '\'' + ", tags=" + tags + '}';
+        }
+    }
 }

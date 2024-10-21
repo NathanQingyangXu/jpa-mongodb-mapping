@@ -31,35 +31,32 @@ import org.junit.jupiter.api.Test;
  * @since 1.0.0
  */
 @MongoIntegrationTest(
-    externalEntities = Book.class,
-    hibernateProperties = {
-      @HibernateProperty(
-          key = "jakarta.persistence.schema-generation.database.action",
-          value = "create")
-    })
+        externalEntities = Book.class,
+        hibernateProperties = {
+            @HibernateProperty(key = "jakarta.persistence.schema-generation.database.action", value = "create")
+        })
 class CollectionIndexCreationTests {
 
-  @CommandRecorderInjected
-  CommandRecorder commandRecorder;
+    @CommandRecorderInjected
+    CommandRecorder commandRecorder;
 
-  @Test
-  void test_index_created() {
-    final var commands = commandRecorder.getCommandsRecorded();
-    assertThat(commands)
-        .allSatisfy(command ->
-            assertThat(command.getString("createIndexes").getValue()).isEqualTo("books"));
-    assertThat(commands)
-        .extracting(command -> command.getArray("indexes"))
-        .allSatisfy(indexes -> assertThat(indexes).hasSize(1));
-    assertThat(commands)
-        .flatExtracting(command -> command.getArray("indexes"))
-        .contains(
-            BsonDocument.parse(
-                "{ name: \"idx_on_single_col\", key: {publishYear: 1}, unique: false}"),
-            BsonDocument.parse(
-                "{ name: \"idx_on_multi_cols\", key: {publisher: 1, author: 1}, unique: false}"),
-            BsonDocument.parse("{ name: \"uniq_idx_on_single_col\", key: {isbn: 1}, unique: true}"),
-            BsonDocument.parse(
-                "{ name: \"uniq_idx_on_multi_cols\", key: {publisher: 1, title: 1}, unique: true}"));
-  }
+    @Test
+    void test_index_created() {
+        final var commands = commandRecorder.getCommandsRecorded();
+        assertThat(commands).allSatisfy(command -> assertThat(
+                        command.getString("createIndexes").getValue())
+                .isEqualTo("books"));
+        assertThat(commands)
+                .extracting(command -> command.getArray("indexes"))
+                .allSatisfy(indexes -> assertThat(indexes).hasSize(1));
+        assertThat(commands)
+                .flatExtracting(command -> command.getArray("indexes"))
+                .contains(
+                        BsonDocument.parse("{ name: \"idx_on_single_col\", key: {publishYear: 1}, unique: false}"),
+                        BsonDocument.parse(
+                                "{ name: \"idx_on_multi_cols\", key: {publisher: 1, author: 1}, unique: false}"),
+                        BsonDocument.parse("{ name: \"uniq_idx_on_single_col\", key: {isbn: 1}, unique: true}"),
+                        BsonDocument.parse(
+                                "{ name: \"uniq_idx_on_multi_cols\", key: {publisher: 1, title: 1}, unique: true}"));
+    }
 }

@@ -16,21 +16,21 @@ import org.hibernate.service.Service;
  */
 public interface CommandRecorder extends Service {
 
-  /**
-   * Record a complete Bson command issued to Mongo
-   *
-   * @param command a de-parameterized BSON command
-   */
-  void record(BsonDocument command);
+    /**
+     * Record a complete Bson command issued to Mongo
+     *
+     * @param command a de-parameterized BSON command
+     */
+    void record(BsonDocument command);
 
-  /**
-   * Return all recorded commands.
-   * @return previous accumulated commands
-   */
-  List<BsonDocument> getCommandsRecorded();
+    /**
+     * Return all recorded commands.
+     * @return previous accumulated commands
+     */
+    List<BsonDocument> getCommandsRecorded();
 
-  /**
-   * empty recorded commands
-   */
-  void clearCommandsRecorded();
+    /**
+     * empty recorded commands
+     */
+    void clearCommandsRecorded();
 }

@@ -34,40 +34,40 @@ import org.junit.jupiter.api.Test;
 @MongoIntegrationTest
 class NullnessTests {
 
-  @SessionFactoryInjected
-  SessionFactory sessionFactory;
+    @SessionFactoryInjected
+    SessionFactory sessionFactory;
 
-  @Test
-  void test() {
-    var foo = new Foo();
-    foo.id = 1L;
-    foo.possiblyNull = "s";
+    @Test
+    void test() {
+        var foo = new Foo();
+        foo.id = 1L;
+        foo.possiblyNull = "s";
 
-    var foo2 = new Foo();
-    foo2.id = 2L;
-    foo2.possiblyNull = null;
+        var foo2 = new Foo();
+        foo2.id = 2L;
+        foo2.possiblyNull = null;
 
-    sessionFactory.inTransaction(session -> {
-      session.persist(foo);
-      session.persist(foo2);
-    });
+        sessionFactory.inTransaction(session -> {
+            session.persist(foo);
+            session.persist(foo2);
+        });
 
-    sessionFactory.inSession(session -> {
-      var query = session.createQuery("from Foo where possiblyNull is null", Foo.class);
-      var res = query.getSingleResult();
-      assertThat(res).usingRecursiveComparison().isEqualTo(foo2);
+        sessionFactory.inSession(session -> {
+            var query = session.createQuery("from Foo where possiblyNull is null", Foo.class);
+            var res = query.getSingleResult();
+            assertThat(res).usingRecursiveComparison().isEqualTo(foo2);
 
-      query = session.createQuery("from Foo where possiblyNull is not null", Foo.class);
-      res = query.getSingleResult();
-      assertThat(res).usingRecursiveComparison().isEqualTo(foo);
-    });
-  }
+            query = session.createQuery("from Foo where possiblyNull is not null", Foo.class);
+            res = query.getSingleResult();
+            assertThat(res).usingRecursiveComparison().isEqualTo(foo);
+        });
+    }
 
-  @Entity(name = "Foo")
-  static class Foo {
-    @Id
-    Long id;
+    @Entity(name = "Foo")
+    static class Foo {
+        @Id
+        Long id;
 
-    String possiblyNull;
-  }
+        String possiblyNull;
+    }
 }

@@ -102,13 +102,13 @@ public final class TypeUtil {
     throw new NotSupportedRuntimeException("unknown JDBC type: " + value.getClass());
   }
 
-  @Nullable public static Object unwrap(@Nullable final BsonValue bsonValue) {
+  @Nullable
+  public static Object unwrap(@Nullable final BsonValue bsonValue) {
     if (bsonValue == null) {
       return null;
     }
     return switch (bsonValue.getBsonType()) {
-      case ARRAY -> ((BsonArray) bsonValue)
-          .getValues().stream().map(TypeUtil::unwrap).toList();
+      case ARRAY -> ((BsonArray) bsonValue).getValues().stream().map(TypeUtil::unwrap).toList();
       case BINARY -> ((BsonBinary) bsonValue).getData();
       case BOOLEAN -> ((BsonBoolean) bsonValue).getValue();
       case DATE_TIME -> ((BsonDateTime) bsonValue).getValue();

@@ -21,21 +21,21 @@ import java.util.List;
 import org.bson.BsonWriter;
 
 public record AstInsertCommand(String collection, List<AstElement> elements) implements AstNode {
-  @Override
-  public AstNodeType nodeType() {
-    return AstNodeType.InsertCommand;
-  }
+    @Override
+    public AstNodeType nodeType() {
+        return AstNodeType.InsertCommand;
+    }
 
-  @Override
-  public void render(final BsonWriter writer) {
-    writer.writeStartDocument();
-    writer.writeString("insert", collection);
-    writer.writeName("documents");
-    writer.writeStartArray();
-    writer.writeStartDocument();
-    elements.forEach(element -> element.render(writer));
-    writer.writeEndDocument();
-    writer.writeEndArray();
-    writer.writeEndDocument();
-  }
+    @Override
+    public void render(final BsonWriter writer) {
+        writer.writeStartDocument();
+        writer.writeString("insert", collection);
+        writer.writeName("documents");
+        writer.writeStartArray();
+        writer.writeStartDocument();
+        elements.forEach(element -> element.render(writer));
+        writer.writeEndDocument();
+        writer.writeEndArray();
+        writer.writeEndDocument();
+    }
 }

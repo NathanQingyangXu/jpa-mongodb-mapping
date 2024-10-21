@@ -13,45 +13,42 @@ import org.hibernate.mapping.Column;
  */
 public class MongoSQLAggregateSupport extends AggregateSupportImpl {
 
-  public static final MongoSQLAggregateSupport INSTANCE = new MongoSQLAggregateSupport();
+    public static final MongoSQLAggregateSupport INSTANCE = new MongoSQLAggregateSupport();
 
-  private MongoSQLAggregateSupport() {}
+    private MongoSQLAggregateSupport() {}
 
-  @Override
-  public String aggregateComponentCustomReadExpression(
-      String template,
-      String placeholder,
-      String aggregateParentReadExpression,
-      String columnExpression,
-      AggregateColumn aggregateColumn,
-      Column column) {
-    switch (aggregateColumn.getTypeCode()) {
-      case STRUCT:
-      case STRUCT_ARRAY:
-        return template.replace(
-            placeholder, '(' + aggregateParentReadExpression + ")." + columnExpression);
+    @Override
+    public String aggregateComponentCustomReadExpression(
+            String template,
+            String placeholder,
+            String aggregateParentReadExpression,
+            String columnExpression,
+            AggregateColumn aggregateColumn,
+            Column column) {
+        switch (aggregateColumn.getTypeCode()) {
+            case STRUCT:
+            case STRUCT_ARRAY:
+                return template.replace(placeholder, '(' + aggregateParentReadExpression + ")." + columnExpression);
+        }
+        throw new IllegalArgumentException("Unsupported aggregate SQL type: " + aggregateColumn.getTypeCode());
     }
-    throw new IllegalArgumentException(
-        "Unsupported aggregate SQL type: " + aggregateColumn.getTypeCode());
-  }
 
-  @Override
-  public String aggregateComponentAssignmentExpression(
-      String aggregateParentAssignmentExpression,
-      String columnExpression,
-      AggregateColumn aggregateColumn,
-      Column column) {
-    switch (aggregateColumn.getTypeCode()) {
-      case STRUCT:
-      case STRUCT_ARRAY:
-        return aggregateParentAssignmentExpression + "." + columnExpression;
+    @Override
+    public String aggregateComponentAssignmentExpression(
+            String aggregateParentAssignmentExpression,
+            String columnExpression,
+            AggregateColumn aggregateColumn,
+            Column column) {
+        switch (aggregateColumn.getTypeCode()) {
+            case STRUCT:
+            case STRUCT_ARRAY:
+                return aggregateParentAssignmentExpression + "." + columnExpression;
+        }
+        throw new IllegalArgumentException("Unsupported aggregate SQL type: " + aggregateColumn.getTypeCode());
     }
-    throw new IllegalArgumentException(
-        "Unsupported aggregate SQL type: " + aggregateColumn.getTypeCode());
-  }
 
-  @Override
-  public boolean requiresAggregateCustomWriteExpressionRenderer(int aggregateSqlTypeCode) {
-    return false;
-  }
+    @Override
+    public boolean requiresAggregateCustomWriteExpressionRenderer(int aggregateSqlTypeCode) {
+        return false;
+    }
 }

@@ -20,15 +20,14 @@ package org.hibernate.omm.translate.translator.mongoast.stages;
 import org.bson.BsonWriter;
 import org.hibernate.omm.translate.translator.mongoast.AstNodeType;
 
-record AstProjectStageIncludeFieldSpecification(String path)
-    implements AstProjectStageSpecification {
-  @Override
-  public AstNodeType nodeType() {
-    return AstNodeType.ProjectStageIncludeFieldSpecification;
-  }
+record AstProjectStageIncludeFieldSpecification(String path) implements AstProjectStageSpecification {
+    @Override
+    public AstNodeType nodeType() {
+        return AstNodeType.ProjectStageIncludeFieldSpecification;
+    }
 
-  @Override
-  public void render(final BsonWriter writer) {
-    writer.writeInt32(path, 1);
-  }
+    @Override
+    public void render(final BsonWriter writer) {
+        writer.writeInt32(path, 1);
+    }
 }

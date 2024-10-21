@@ -26,15 +26,15 @@ import org.hibernate.omm.util.CollectionUtil;
  * @since 1.0.0
  */
 public class MongoConfigMissingException extends RuntimeException {
-  private final Set<String> missingSettings;
+    private final Set<String> missingSettings;
 
-  public MongoConfigMissingException(final Set<String> missingSettings) {
-    Assertions.assertTrue(CollectionUtil.isNotEmpty(missingSettings));
-    this.missingSettings = missingSettings;
-  }
+    public MongoConfigMissingException(final Set<String> missingSettings) {
+        Assertions.assertTrue(CollectionUtil.isNotEmpty(missingSettings));
+        this.missingSettings = missingSettings;
+    }
 
-  @Override
-  public String getMessage() {
-    return String.format("mandatory Mongo specific configuration missing: " + missingSettings);
-  }
+    @Override
+    public String getMessage() {
+        return String.format("mandatory Mongo specific configuration missing: " + missingSettings);
+    }
 }

@@ -9,7 +9,7 @@ import org.hibernate.omm.jdbc.MongoDatabaseMetaData;
  */
 public class MongoDialectResolver extends BasicDialectResolver {
 
-  public MongoDialectResolver() {
-    super(MongoDatabaseMetaData.MONGO_DATABASE_PRODUCT_NAME, MongoDialect.class);
-  }
+    public MongoDialectResolver() {
+        super(MongoDatabaseMetaData.MONGO_DATABASE_PRODUCT_NAME, MongoDialect.class);
+    }
 }

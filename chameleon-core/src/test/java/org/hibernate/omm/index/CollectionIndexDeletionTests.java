@@ -37,22 +37,19 @@ import org.junit.jupiter.api.Test;
 )*/
 class CollectionIndexDeletionTests {
 
-  @CommandRecorderInjected
-  CommandRecorder commandRecorder;
+    @CommandRecorderInjected
+    CommandRecorder commandRecorder;
 
-  @Disabled("need more work to return collection in DatabaseMetadata")
-  @Test
-  void test_indexes_dropped() {
-    final var commands = commandRecorder.getCommandsRecorded();
-    assertThat(commands)
-        .allSatisfy(
-            command -> assertThat(command.getString("dropIndexes").getValue()).isEqualTo("books"));
-    assertThat(commands)
-        .extracting(command -> command.getString("index").getValue())
-        .containsExactlyInAnyOrder(
-            "idx_on_single_col",
-            "idx_on_multi_cols",
-            "uniq_idx_on_single_col",
-            "uniq_idx_on_multi_cols");
-  }
+    @Disabled("need more work to return collection in DatabaseMetadata")
+    @Test
+    void test_indexes_dropped() {
+        final var commands = commandRecorder.getCommandsRecorded();
+        assertThat(commands)
+                .allSatisfy(command ->
+                        assertThat(command.getString("dropIndexes").getValue()).isEqualTo("books"));
+        assertThat(commands)
+                .extracting(command -> command.getString("index").getValue())
+                .containsExactlyInAnyOrder(
+                        "idx_on_single_col", "idx_on_multi_cols", "uniq_idx_on_single_col", "uniq_idx_on_multi_cols");
+    }
 }

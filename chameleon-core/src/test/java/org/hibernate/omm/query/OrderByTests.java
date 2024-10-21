@@ -35,53 +35,53 @@ import org.junit.jupiter.api.Test;
 @MongoIntegrationTest
 class OrderByTests {
 
-  @SessionFactoryInjected
-  SessionFactory sessionFactory;
+    @SessionFactoryInjected
+    SessionFactory sessionFactory;
 
-  @Test
-  void test() {
-    var book1 = new Book();
-    book1.id = 1L;
-    book1.title = "War and Peace";
-    book1.author = "Leo Tolstoy";
-    book1.publishYear = 1869;
+    @Test
+    void test() {
+        var book1 = new Book();
+        book1.id = 1L;
+        book1.title = "War and Peace";
+        book1.author = "Leo Tolstoy";
+        book1.publishYear = 1869;
 
-    var book2 = new Book();
-    book2.id = 2L;
-    book2.title = "The Idiot";
-    book2.author = "Fyodor Dostoevsky";
-    book2.publishYear = 1869;
+        var book2 = new Book();
+        book2.id = 2L;
+        book2.title = "The Idiot";
+        book2.author = "Fyodor Dostoevsky";
+        book2.publishYear = 1869;
 
-    sessionFactory.inTransaction(session -> {
-      session.persist(book1);
-      session.persist(book2);
-    });
+        sessionFactory.inTransaction(session -> {
+            session.persist(book1);
+            session.persist(book2);
+        });
 
-    sessionFactory.inSession(session -> {
-      var query = session.createQuery("from Book b order by b.title asc", Book.class);
-      var books = query.getResultList();
-      assertThat(books).usingRecursiveComparison().isEqualTo(List.of(book2, book1));
+        sessionFactory.inSession(session -> {
+            var query = session.createQuery("from Book b order by b.title asc", Book.class);
+            var books = query.getResultList();
+            assertThat(books).usingRecursiveComparison().isEqualTo(List.of(book2, book1));
 
-      query = session.createQuery("from Book b order by b.title desc", Book.class);
-      books = query.getResultList();
-      assertThat(books).usingRecursiveComparison().isEqualTo(List.of(book1, book2));
+            query = session.createQuery("from Book b order by b.title desc", Book.class);
+            books = query.getResultList();
+            assertThat(books).usingRecursiveComparison().isEqualTo(List.of(book1, book2));
 
-      query = session.createQuery("from Book b order by b.publishYear, b.title desc", Book.class);
-      books = query.getResultList();
-      assertThat(books).usingRecursiveComparison().isEqualTo(List.of(book1, book2));
-    });
-  }
+            query = session.createQuery("from Book b order by b.publishYear, b.title desc", Book.class);
+            books = query.getResultList();
+            assertThat(books).usingRecursiveComparison().isEqualTo(List.of(book1, book2));
+        });
+    }
 
-  @Entity(name = "Book")
-  static class Book {
+    @Entity(name = "Book")
+    static class Book {
 
-    @Id
-    Long id;
+        @Id
+        Long id;
 
-    String title;
+        String title;
 
-    String author;
+        String author;
 
-    int publishYear;
-  }
+        int publishYear;
+    }
 }

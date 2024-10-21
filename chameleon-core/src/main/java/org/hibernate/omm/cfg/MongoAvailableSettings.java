@@ -9,6 +9,6 @@ package org.hibernate.omm.cfg;
  * @since 1.0.0
  */
 public interface MongoAvailableSettings {
-  // simulating Hibernate's AvailableSettings class
-  // currently empty for now
+    // simulating Hibernate's AvailableSettings class
+    // currently empty for now
 }

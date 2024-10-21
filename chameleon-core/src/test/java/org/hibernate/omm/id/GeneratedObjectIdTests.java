@@ -40,41 +40,41 @@ import org.junit.jupiter.api.Test;
 @MongoIntegrationTest
 class GeneratedObjectIdTests {
 
-  @SessionFactoryInjected
-  SessionFactory sessionFactory;
+    @SessionFactoryInjected
+    SessionFactory sessionFactory;
 
-  @CommandRecorderInjected
-  CommandRecorder commandRecorder;
+    @CommandRecorderInjected
+    CommandRecorder commandRecorder;
 
-  @Test
-  void test() {
-    sessionFactory.inTransaction(session -> {
-      var book = new Book();
-      book.title = "Moby-Dick";
-      session.persist(book);
-    });
-    assertThat(commandRecorder.getCommandsRecorded()).singleElement().satisfies(command -> {
-      assertThat(command.getArray("documents")).singleElement().satisfies(doc -> {
-        assertThat(doc.isDocument()).isTrue();
-        assertThat(doc.asDocument())
-            .overridingErrorMessage("'_id' field with ObjectId type should have been generated")
-            .containsKey("_id")
-            .extractingByKey("_id")
-            .isNotNull()
-            .extracting(BsonValue::asObjectId)
-            .isNotNull();
-      });
-    });
-  }
+    @Test
+    void test() {
+        sessionFactory.inTransaction(session -> {
+            var book = new Book();
+            book.title = "Moby-Dick";
+            session.persist(book);
+        });
+        assertThat(commandRecorder.getCommandsRecorded()).singleElement().satisfies(command -> {
+            assertThat(command.getArray("documents")).singleElement().satisfies(doc -> {
+                assertThat(doc.isDocument()).isTrue();
+                assertThat(doc.asDocument())
+                        .overridingErrorMessage("'_id' field with ObjectId type should have been generated")
+                        .containsKey("_id")
+                        .extractingByKey("_id")
+                        .isNotNull()
+                        .extracting(BsonValue::asObjectId)
+                        .isNotNull();
+            });
+        });
+    }
 
-  @Entity(name = "Book")
-  static class Book {
+    @Entity(name = "Book")
+    static class Book {
 
-    @Id
-    @GeneratedValue
-    @ObjectIdGenerator
-    ObjectId id;
+        @Id
+        @GeneratedValue
+        @ObjectIdGenerator
+        ObjectId id;
 
-    String title;
-  }
+        String title;
+    }
 }

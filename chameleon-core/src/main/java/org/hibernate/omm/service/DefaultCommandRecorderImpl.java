@@ -12,24 +12,24 @@ import org.bson.BsonDocument;
  */
 public class DefaultCommandRecorderImpl implements CommandRecorder {
 
-  public static final DefaultCommandRecorderImpl INSTANCE = new DefaultCommandRecorderImpl();
+    public static final DefaultCommandRecorderImpl INSTANCE = new DefaultCommandRecorderImpl();
 
-  private DefaultCommandRecorderImpl() {}
+    private DefaultCommandRecorderImpl() {}
 
-  private final List<BsonDocument> records = new ArrayList<>();
+    private final List<BsonDocument> records = new ArrayList<>();
 
-  @Override
-  public void record(final BsonDocument command) {
-    records.add(command);
-  }
+    @Override
+    public void record(final BsonDocument command) {
+        records.add(command);
+    }
 
-  @Override
-  public List<BsonDocument> getCommandsRecorded() {
-    return records;
-  }
+    @Override
+    public List<BsonDocument> getCommandsRecorded() {
+        return records;
+    }
 
-  @Override
-  public void clearCommandsRecorded() {
-    this.records.clear();
-  }
+    @Override
+    public void clearCommandsRecorded() {
+        this.records.clear();
+    }
 }

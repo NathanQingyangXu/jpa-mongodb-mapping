@@ -38,40 +38,39 @@ import org.junit.jupiter.api.Test;
 @MongoIntegrationTest
 class GeneratedUuidStorageTests {
 
-  @SessionFactoryInjected
-  SessionFactory sessionFactory;
+    @SessionFactoryInjected
+    SessionFactory sessionFactory;
 
-  @CommandRecorderInjected
-  CommandRecorder commandRecorder;
+    @CommandRecorderInjected
+    CommandRecorder commandRecorder;
 
-  @Test
-  void test_string_representation() {
-    sessionFactory.inTransaction(session -> {
-      var book = new Book();
-      book.title = "The Last of the Mohicans";
-      book.author = "James Fenimore Cooper";
-      session.persist(book);
-    });
+    @Test
+    void test_string_representation() {
+        sessionFactory.inTransaction(session -> {
+            var book = new Book();
+            book.title = "The Last of the Mohicans";
+            book.author = "James Fenimore Cooper";
+            session.persist(book);
+        });
 
-    assertThat(commandRecorder.getCommandsRecorded()).singleElement().satisfies(command -> {
-      assertThat(command.getArray("documents")).singleElement().satisfies(doc -> {
-        assertThat(doc.isDocument()).isTrue();
-        assertThat(doc.asDocument().get("_id").isString())
-            .overridingErrorMessage(
-                "UUID value of String format instead of binary format should be stored")
-            .isTrue();
-      });
-    });
-  }
+        assertThat(commandRecorder.getCommandsRecorded()).singleElement().satisfies(command -> {
+            assertThat(command.getArray("documents")).singleElement().satisfies(doc -> {
+                assertThat(doc.isDocument()).isTrue();
+                assertThat(doc.asDocument().get("_id").isString())
+                        .overridingErrorMessage("UUID value of String format instead of binary format should be stored")
+                        .isTrue();
+            });
+        });
+    }
 
-  @Entity(name = "Book")
-  static class Book {
-    @Id
-    @GeneratedValue
-    @UuidGenerator
-    UUID id;
+    @Entity(name = "Book")
+    static class Book {
+        @Id
+        @GeneratedValue
+        @UuidGenerator
+        UUID id;
 
-    String title;
-    String author;
-  }
+        String title;
+        String author;
+    }
 }

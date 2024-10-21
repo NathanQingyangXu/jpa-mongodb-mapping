@@ -38,61 +38,61 @@ import org.junit.jupiter.api.Test;
 @MongoIntegrationTest
 class MongoIdColumnNameTests {
 
-  @SessionFactoryInjected
-  static SessionFactory sessionFactory;
+    @SessionFactoryInjected
+    static SessionFactory sessionFactory;
 
-  @MongoDatabaseInjected
-  static MongoDatabase mongoDatabase;
+    @MongoDatabaseInjected
+    static MongoDatabase mongoDatabase;
 
-  final Long id = 21344L;
+    final Long id = 21344L;
 
-  @Test
-  @DisplayName("when @Id field was not annotated with @Column(name = \"xxx\")")
-  void test_implicit_id_column_spec() {
+    @Test
+    @DisplayName("when @Id field was not annotated with @Column(name = \"xxx\")")
+    void test_implicit_id_column_spec() {
 
-    sessionFactory.inTransaction(session -> {
-      var entity = new WithImplicitIdColumnSpec();
-      entity.id = id;
-      entity.title = "Bible";
-      session.persist(entity);
-    });
+        sessionFactory.inTransaction(session -> {
+            var entity = new WithImplicitIdColumnSpec();
+            entity.id = id;
+            entity.title = "Bible";
+            session.persist(entity);
+        });
 
-    assertThat(mongoDatabase.getCollection("books").find(Filters.eq(id)).first())
-        .isNotNull();
-  }
+        assertThat(mongoDatabase.getCollection("books").find(Filters.eq(id)).first())
+                .isNotNull();
+    }
 
-  @Test
-  @DisplayName("when @Id field was annotated with @Column(name = \"xxx\")")
-  void test_explicit_id_column_spec() {
-    sessionFactory.inTransaction(session -> {
-      var entity = new WithExplicitIdColumnSpec();
-      entity.id = id;
-      entity.title = "Bible";
-      session.persist(entity);
-    });
+    @Test
+    @DisplayName("when @Id field was annotated with @Column(name = \"xxx\")")
+    void test_explicit_id_column_spec() {
+        sessionFactory.inTransaction(session -> {
+            var entity = new WithExplicitIdColumnSpec();
+            entity.id = id;
+            entity.title = "Bible";
+            session.persist(entity);
+        });
 
-    assertThat(mongoDatabase.getCollection("books").find(Filters.eq(id)).first())
-        .isNotNull();
-  }
+        assertThat(mongoDatabase.getCollection("books").find(Filters.eq(id)).first())
+                .isNotNull();
+    }
 
-  @Entity(name = "WithImplicitIdColumnSpec")
-  @Table(name = "books")
-  static class WithImplicitIdColumnSpec {
+    @Entity(name = "WithImplicitIdColumnSpec")
+    @Table(name = "books")
+    static class WithImplicitIdColumnSpec {
 
-    @Id
-    Long id;
+        @Id
+        Long id;
 
-    String title;
-  }
+        String title;
+    }
 
-  @Entity(name = "WithExplicitIdColumnSpec")
-  @Table(name = "books")
-  static class WithExplicitIdColumnSpec {
+    @Entity(name = "WithExplicitIdColumnSpec")
+    @Table(name = "books")
+    static class WithExplicitIdColumnSpec {
 
-    @Id
-    @Column(name = "identifier")
-    Long id;
+        @Id
+        @Column(name = "identifier")
+        Long id;
 
-    String title;
-  }
+        String title;
+    }
 }

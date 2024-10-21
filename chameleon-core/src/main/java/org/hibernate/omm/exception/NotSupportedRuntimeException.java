@@ -9,17 +9,17 @@ package org.hibernate.omm.exception;
  */
 public class NotSupportedRuntimeException extends RuntimeException {
 
-  public NotSupportedRuntimeException() {}
+    public NotSupportedRuntimeException() {}
 
-  public NotSupportedRuntimeException(final String message) {
-    super(message);
-  }
+    public NotSupportedRuntimeException(final String message) {
+        super(message);
+    }
 
-  public NotSupportedRuntimeException(final String message, final Throwable cause) {
-    super(message, cause);
-  }
+    public NotSupportedRuntimeException(final String message, final Throwable cause) {
+        super(message, cause);
+    }
 
-  public NotSupportedRuntimeException(final Throwable cause) {
-    super(cause);
-  }
+    public NotSupportedRuntimeException(final Throwable cause) {
+        super(cause);
+    }
 }

@@ -34,125 +34,125 @@ import org.junit.jupiter.api.Test;
 @MongoIntegrationTest
 class ObjectIdTypeTests {
 
-  final ObjectId objectId = ObjectId.get();
+    final ObjectId objectId = ObjectId.get();
 
-  @SessionFactoryInjected
-  SessionFactory sessionFactory;
+    @SessionFactoryInjected
+    SessionFactory sessionFactory;
 
-  Book insertBook() {
-    return sessionFactory.fromTransaction(session -> {
-      var book = new Book();
-      book.id = objectId;
-      book.title = "War and Peace";
-      book.author = "Leo Tolstoy";
-      book.publishYear = 1869;
-      session.persist(book);
-      return book;
-    });
-  }
+    Book insertBook() {
+        return sessionFactory.fromTransaction(session -> {
+            var book = new Book();
+            book.id = objectId;
+            book.title = "War and Peace";
+            book.author = "Leo Tolstoy";
+            book.publishYear = 1869;
+            session.persist(book);
+            return book;
+        });
+    }
 
-  @Test
-  void testInsert() {
+    @Test
+    void testInsert() {
 
-    // the following JSON command will be issued:
-    // { insert: "books", documents: [ { author: ?, publishYear: ?, title: ?, _id: ? } ] }
-    var insertedBook = insertBook();
+        // the following JSON command will be issued:
+        // { insert: "books", documents: [ { author: ?, publishYear: ?, title: ?, _id: ? } ] }
+        var insertedBook = insertBook();
 
-    sessionFactory.inTransaction(session -> {
-      var query = session.createQuery("from Book where id = :id", Book.class);
-      query.setParameter("id", objectId);
-      var book = query.getSingleResult();
-      assertThat(book).usingRecursiveComparison().isEqualTo(insertedBook);
-    });
-  }
+        sessionFactory.inTransaction(session -> {
+            var query = session.createQuery("from Book where id = :id", Book.class);
+            query.setParameter("id", objectId);
+            var book = query.getSingleResult();
+            assertThat(book).usingRecursiveComparison().isEqualTo(insertedBook);
+        });
+    }
 
-  @Test
-  void testDelete() {
+    @Test
+    void testDelete() {
 
-    insertBook();
+        insertBook();
 
-    // the following JSON command will be issued:
-    // { delete: "books", deletes: [ { q: { _id: { $eq: ? } }, limit: 0 } ] }
-    sessionFactory.inTransaction(session -> {
-      var book = session.getReference(Book.class, objectId);
-      session.remove(book);
-    });
-    sessionFactory.inTransaction(session -> {
-      var query = session.createSelectionQuery("from Book where id = :id", Book.class);
-      query.setParameter("id", objectId);
-      assertThat(query.getResultList()).isEmpty();
-    });
-  }
+        // the following JSON command will be issued:
+        // { delete: "books", deletes: [ { q: { _id: { $eq: ? } }, limit: 0 } ] }
+        sessionFactory.inTransaction(session -> {
+            var book = session.getReference(Book.class, objectId);
+            session.remove(book);
+        });
+        sessionFactory.inTransaction(session -> {
+            var query = session.createSelectionQuery("from Book where id = :id", Book.class);
+            query.setParameter("id", objectId);
+            assertThat(query.getResultList()).isEmpty();
+        });
+    }
 
-  @Test
-  void testLoad() {
+    @Test
+    void testLoad() {
 
-    var insertedBook = insertBook();
+        var insertedBook = insertBook();
 
-    // the following JSON command will be issued:
-    // { aggregate: "books", pipeline: [ { $match: { _id: { $eq: ? } }}, { $project: { _id: 1,
-    // author: 1, publishYear: 1, title: 1 } } ] }
-    sessionFactory.inTransaction(session -> {
-      var book = new Book();
-      session.load(book, objectId);
-      assertThat(book).usingRecursiveComparison().isEqualTo(insertedBook);
-    });
-  }
+        // the following JSON command will be issued:
+        // { aggregate: "books", pipeline: [ { $match: { _id: { $eq: ? } }}, { $project: { _id: 1,
+        // author: 1, publishYear: 1, title: 1 } } ] }
+        sessionFactory.inTransaction(session -> {
+            var book = new Book();
+            session.load(book, objectId);
+            assertThat(book).usingRecursiveComparison().isEqualTo(insertedBook);
+        });
+    }
 
-  @Test
-  void testQuery() {
+    @Test
+    void testQuery() {
 
-    var insertedBook = insertBook();
+        var insertedBook = insertBook();
 
-    // the following JSON command will be issued:
-    // { aggregate: "books", pipeline: [ { $match: { _id: { $eq: ? } }}, { $project: { _id: 1,
-    // author: 1, publishYear: 1, title: 1 } } ] }
-    sessionFactory.inTransaction(session -> {
-      var query = session.createQuery("from Book where id = :id", Book.class);
-      query.setParameter("id", objectId);
-      var book = query.getSingleResult();
-      assertThat(book).usingRecursiveComparison().isEqualTo(insertedBook);
-    });
-  }
+        // the following JSON command will be issued:
+        // { aggregate: "books", pipeline: [ { $match: { _id: { $eq: ? } }}, { $project: { _id: 1,
+        // author: 1, publishYear: 1, title: 1 } } ] }
+        sessionFactory.inTransaction(session -> {
+            var query = session.createQuery("from Book where id = :id", Book.class);
+            query.setParameter("id", objectId);
+            var book = query.getSingleResult();
+            assertThat(book).usingRecursiveComparison().isEqualTo(insertedBook);
+        });
+    }
 
-  @Test
-  void testUpdate() {
-    insertBook();
-    var newAuthor = "Fyodor Dostoevsky";
-    var newTitle = "Crime and Punishment";
-    int newPublishYear = 1866;
+    @Test
+    void testUpdate() {
+        insertBook();
+        var newAuthor = "Fyodor Dostoevsky";
+        var newTitle = "Crime and Punishment";
+        int newPublishYear = 1866;
 
-    // the following JSON command will be issued:
-    // { update: "books", updates: [ { q: { _id: { $eq: ? } }, u: { $set: { author: ?, publishYear:
-    // ?, title: ? } } } ] }
-    sessionFactory.inTransaction(session -> {
-      var book = new Book();
-      session.load(book, objectId);
-      book.author = newAuthor;
-      book.title = newTitle;
-      book.publishYear = newPublishYear;
-      session.persist(book);
-    });
-    sessionFactory.inSession(session -> {
-      var query = session.createQuery("from Book where id = :id", Book.class);
-      query.setParameter("id", objectId);
-      var book = query.getSingleResult();
-      assertThat(book)
-          .extracting("author", "title", "publishYear")
-          .containsOnly(newAuthor, newTitle, newPublishYear);
-    });
-  }
+        // the following JSON command will be issued:
+        // { update: "books", updates: [ { q: { _id: { $eq: ? } }, u: { $set: { author: ?, publishYear:
+        // ?, title: ? } } } ] }
+        sessionFactory.inTransaction(session -> {
+            var book = new Book();
+            session.load(book, objectId);
+            book.author = newAuthor;
+            book.title = newTitle;
+            book.publishYear = newPublishYear;
+            session.persist(book);
+        });
+        sessionFactory.inSession(session -> {
+            var query = session.createQuery("from Book where id = :id", Book.class);
+            query.setParameter("id", objectId);
+            var book = query.getSingleResult();
+            assertThat(book)
+                    .extracting("author", "title", "publishYear")
+                    .containsOnly(newAuthor, newTitle, newPublishYear);
+        });
+    }
 
-  @Entity(name = "Book")
-  static class Book {
+    @Entity(name = "Book")
+    static class Book {
 
-    @Id
-    ObjectId id;
+        @Id
+        ObjectId id;
 
-    String title;
+        String title;
 
-    String author;
+        String author;
 
-    int publishYear;
-  }
+        int publishYear;
+    }
 }

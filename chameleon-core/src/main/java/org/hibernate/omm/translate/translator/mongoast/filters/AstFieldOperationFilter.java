@@ -20,25 +20,24 @@ package org.hibernate.omm.translate.translator.mongoast.filters;
 import org.bson.BsonWriter;
 import org.hibernate.omm.translate.translator.mongoast.AstNodeType;
 
-public record AstFieldOperationFilter(AstFilterField field, AstFilterOperation operation)
-    implements AstFilter {
-  @Override
-  public AstNodeType nodeType() {
-    return AstNodeType.FieldOperationFilter;
-  }
+public record AstFieldOperationFilter(AstFilterField field, AstFilterOperation operation) implements AstFilter {
+    @Override
+    public AstNodeType nodeType() {
+        return AstNodeType.FieldOperationFilter;
+    }
 
-  @Override
-  public void render(final BsonWriter writer) {
-    writer.writeStartDocument();
-    field.render(writer);
-    operation.render(writer);
-    writer.writeEndDocument();
-  }
+    @Override
+    public void render(final BsonWriter writer) {
+        writer.writeStartDocument();
+        field.render(writer);
+        operation.render(writer);
+        writer.writeEndDocument();
+    }
 
-  @Override
-  public boolean isIdEqualityFilter() {
-    return field().path().equals("_id")
-        && operation() instanceof AstComparisonFilterOperation comparisonFilterOperation
-        && comparisonFilterOperation.operator().equals(AstComparisonFilterOperator.EQ);
-  }
+    @Override
+    public boolean isIdEqualityFilter() {
+        return field().path().equals("_id")
+                && operation() instanceof AstComparisonFilterOperation comparisonFilterOperation
+                && comparisonFilterOperation.operator().equals(AstComparisonFilterOperator.EQ);
+    }
 }

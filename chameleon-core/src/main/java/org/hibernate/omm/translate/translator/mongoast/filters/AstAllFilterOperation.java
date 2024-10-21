@@ -22,16 +22,16 @@ import org.hibernate.omm.translate.translator.mongoast.AstNodeType;
 import org.hibernate.omm.translate.translator.mongoast.AstValue;
 
 public record AstAllFilterOperation(AstValue value) implements AstFilterOperation {
-  @Override
-  public AstNodeType nodeType() {
-    return AstNodeType.AllFilterOperation;
-  }
+    @Override
+    public AstNodeType nodeType() {
+        return AstNodeType.AllFilterOperation;
+    }
 
-  @Override
-  public void render(final BsonWriter writer) {
-    writer.writeStartDocument();
-    writer.writeName("$all");
-    value.render(writer);
-    writer.writeEndDocument();
-  }
+    @Override
+    public void render(final BsonWriter writer) {
+        writer.writeStartDocument();
+        writer.writeName("$all");
+        value.render(writer);
+        writer.writeEndDocument();
+    }
 }

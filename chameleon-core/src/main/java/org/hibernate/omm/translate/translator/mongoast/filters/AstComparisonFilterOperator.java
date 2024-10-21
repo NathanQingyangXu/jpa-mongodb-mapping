@@ -18,20 +18,20 @@
 package org.hibernate.omm.translate.translator.mongoast.filters;
 
 public enum AstComparisonFilterOperator {
-  EQ("$eq"),
-  GT("$gt"),
-  GTE("$gte"),
-  LT("$lt"),
-  LTE("$lte"),
-  NE("$ne");
+    EQ("$eq"),
+    GT("$gt"),
+    GTE("$gte"),
+    LT("$lt"),
+    LTE("$lte"),
+    NE("$ne");
 
-  public String operatorName() {
-    return operatorName;
-  }
+    public String operatorName() {
+        return operatorName;
+    }
 
-  private final String operatorName;
+    private final String operatorName;
 
-  AstComparisonFilterOperator(String operatorName) {
-    this.operatorName = operatorName;
-  }
+    AstComparisonFilterOperator(String operatorName) {
+        this.operatorName = operatorName;
+    }
 }

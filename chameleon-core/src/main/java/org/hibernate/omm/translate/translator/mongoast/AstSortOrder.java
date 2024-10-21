@@ -20,5 +20,5 @@ package org.hibernate.omm.translate.translator.mongoast;
 import org.bson.BsonWriter;
 
 public interface AstSortOrder {
-  void render(BsonWriter writer);
+    void render(BsonWriter writer);
 }

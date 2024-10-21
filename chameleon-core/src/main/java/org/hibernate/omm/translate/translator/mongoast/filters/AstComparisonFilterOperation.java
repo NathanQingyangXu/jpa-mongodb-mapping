@@ -22,17 +22,17 @@ import org.hibernate.omm.translate.translator.mongoast.AstNodeType;
 import org.hibernate.omm.translate.translator.mongoast.AstValue;
 
 public record AstComparisonFilterOperation(AstComparisonFilterOperator operator, AstValue value)
-    implements AstFilterOperation {
-  @Override
-  public AstNodeType nodeType() {
-    return AstNodeType.ComparisonFilterOperation;
-  }
+        implements AstFilterOperation {
+    @Override
+    public AstNodeType nodeType() {
+        return AstNodeType.ComparisonFilterOperation;
+    }
 
-  @Override
-  public void render(final BsonWriter writer) {
-    writer.writeStartDocument();
-    writer.writeName(operator.operatorName());
-    value.render(writer);
-    writer.writeEndDocument();
-  }
+    @Override
+    public void render(final BsonWriter writer) {
+        writer.writeStartDocument();
+        writer.writeName(operator.operatorName());
+        value.render(writer);
+        writer.writeEndDocument();
+    }
 }

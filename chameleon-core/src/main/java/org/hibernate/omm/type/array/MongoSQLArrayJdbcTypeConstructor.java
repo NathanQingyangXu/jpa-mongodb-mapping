@@ -10,30 +10,28 @@ import org.hibernate.type.spi.TypeConfiguration;
 
 public class MongoSQLArrayJdbcTypeConstructor implements JdbcTypeConstructor {
 
-  public static final MongoSQLArrayJdbcTypeConstructor INSTANCE =
-      new MongoSQLArrayJdbcTypeConstructor();
+    public static final MongoSQLArrayJdbcTypeConstructor INSTANCE = new MongoSQLArrayJdbcTypeConstructor();
 
-  @Override
-  public JdbcType resolveType(
-      TypeConfiguration typeConfiguration,
-      Dialect dialect,
-      BasicType<?> elementType,
-      ColumnTypeInformation columnTypeInformation) {
-    return resolveType(
-        typeConfiguration, dialect, elementType.getJdbcType(), columnTypeInformation);
-  }
+    @Override
+    public JdbcType resolveType(
+            TypeConfiguration typeConfiguration,
+            Dialect dialect,
+            BasicType<?> elementType,
+            ColumnTypeInformation columnTypeInformation) {
+        return resolveType(typeConfiguration, dialect, elementType.getJdbcType(), columnTypeInformation);
+    }
 
-  @Override
-  public JdbcType resolveType(
-      TypeConfiguration typeConfiguration,
-      Dialect dialect,
-      JdbcType elementType,
-      ColumnTypeInformation columnTypeInformation) {
-    return new MongoSQLArrayJdbcType(elementType);
-  }
+    @Override
+    public JdbcType resolveType(
+            TypeConfiguration typeConfiguration,
+            Dialect dialect,
+            JdbcType elementType,
+            ColumnTypeInformation columnTypeInformation) {
+        return new MongoSQLArrayJdbcType(elementType);
+    }
 
-  @Override
-  public int getDefaultSqlTypeCode() {
-    return Types.ARRAY;
-  }
+    @Override
+    public int getDefaultSqlTypeCode() {
+        return Types.ARRAY;
+    }
 }

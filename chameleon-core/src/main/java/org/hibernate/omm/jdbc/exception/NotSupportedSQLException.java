@@ -5,13 +5,13 @@ package org.hibernate.omm.jdbc.exception;
  * @since 1.0.0
  */
 public class NotSupportedSQLException extends SimulatedSQLException {
-  public NotSupportedSQLException() {}
+    public NotSupportedSQLException() {}
 
-  public NotSupportedSQLException(final String reason) {
-    super(reason);
-  }
+    public NotSupportedSQLException(final String reason) {
+        super(reason);
+    }
 
-  public NotSupportedSQLException(final String reason, final Throwable cause) {
-    super(reason, cause);
-  }
+    public NotSupportedSQLException(final String reason, final Throwable cause) {
+        super(reason, cause);
+    }
 }

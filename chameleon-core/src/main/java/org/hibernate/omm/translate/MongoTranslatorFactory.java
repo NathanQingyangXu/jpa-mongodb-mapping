@@ -14,21 +14,21 @@ import org.hibernate.sql.model.jdbc.JdbcMutationOperation;
 
 public class MongoTranslatorFactory implements SqlAstTranslatorFactory {
 
-  @Override
-  public SqlAstTranslator<JdbcOperationQuerySelect> buildSelectTranslator(
-      final SessionFactoryImplementor sessionFactory, final SelectStatement statement) {
-    return new MQLTranslator(sessionFactory, statement);
-  }
+    @Override
+    public SqlAstTranslator<JdbcOperationQuerySelect> buildSelectTranslator(
+            final SessionFactoryImplementor sessionFactory, final SelectStatement statement) {
+        return new MQLTranslator(sessionFactory, statement);
+    }
 
-  @Override
-  public SqlAstTranslator<? extends JdbcOperationQueryMutation> buildMutationTranslator(
-      final SessionFactoryImplementor sessionFactory, final MutationStatement statement) {
-    return new BsonCommandTranslator<>(sessionFactory, statement);
-  }
+    @Override
+    public SqlAstTranslator<? extends JdbcOperationQueryMutation> buildMutationTranslator(
+            final SessionFactoryImplementor sessionFactory, final MutationStatement statement) {
+        return new BsonCommandTranslator<>(sessionFactory, statement);
+    }
 
-  @Override
-  public <O extends JdbcMutationOperation> SqlAstTranslator<O> buildModelMutationTranslator(
-      final TableMutation<O> mutation, final SessionFactoryImplementor sessionFactory) {
-    return new BsonCommandTranslator<>(sessionFactory, mutation);
-  }
+    @Override
+    public <O extends JdbcMutationOperation> SqlAstTranslator<O> buildModelMutationTranslator(
+            final TableMutation<O> mutation, final SessionFactoryImplementor sessionFactory) {
+        return new BsonCommandTranslator<>(sessionFactory, mutation);
+    }
 }

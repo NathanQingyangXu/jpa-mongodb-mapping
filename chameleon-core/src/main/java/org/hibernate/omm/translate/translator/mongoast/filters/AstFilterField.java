@@ -22,13 +22,13 @@ import org.hibernate.omm.translate.translator.mongoast.AstNode;
 import org.hibernate.omm.translate.translator.mongoast.AstNodeType;
 
 public record AstFilterField(String path) implements AstNode {
-  @Override
-  public AstNodeType nodeType() {
-    return AstNodeType.FilterField;
-  }
+    @Override
+    public AstNodeType nodeType() {
+        return AstNodeType.FilterField;
+    }
 
-  @Override
-  public void render(final BsonWriter writer) {
-    writer.writeName(path);
-  }
+    @Override
+    public void render(final BsonWriter writer) {
+        writer.writeName(path);
+    }
 }

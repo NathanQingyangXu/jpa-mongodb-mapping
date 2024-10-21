@@ -23,18 +23,18 @@ import org.hibernate.omm.translate.translator.mongoast.AstNodeType;
 import org.hibernate.omm.translate.translator.mongoast.AstSortField;
 
 public record AstSortStage(List<AstSortField> sortFields) implements AstStage {
-  @Override
-  public AstNodeType nodeType() {
-    return AstNodeType.SortStage;
-  }
+    @Override
+    public AstNodeType nodeType() {
+        return AstNodeType.SortStage;
+    }
 
-  @Override
-  public void render(final BsonWriter writer) {
-    writer.writeStartDocument();
-    writer.writeName("$sort");
-    writer.writeStartDocument();
-    sortFields.forEach(sortField -> sortField.render(writer));
-    writer.writeEndDocument();
-    writer.writeEndDocument();
-  }
+    @Override
+    public void render(final BsonWriter writer) {
+        writer.writeStartDocument();
+        writer.writeName("$sort");
+        writer.writeStartDocument();
+        sortFields.forEach(sortField -> sortField.render(writer));
+        writer.writeEndDocument();
+        writer.writeEndDocument();
+    }
 }

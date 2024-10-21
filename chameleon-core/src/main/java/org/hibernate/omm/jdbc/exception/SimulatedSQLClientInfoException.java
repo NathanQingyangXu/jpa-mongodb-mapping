@@ -7,5 +7,5 @@ import java.sql.SQLClientInfoException;
  * @since 1.0.0
  */
 public class SimulatedSQLClientInfoException extends SQLClientInfoException {
-  public SimulatedSQLClientInfoException() {}
+    public SimulatedSQLClientInfoException() {}
 }

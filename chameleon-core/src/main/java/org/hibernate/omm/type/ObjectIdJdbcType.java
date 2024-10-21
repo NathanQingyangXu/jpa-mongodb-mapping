@@ -27,97 +27,90 @@ import org.hibernate.type.spi.TypeConfiguration;
  */
 public class ObjectIdJdbcType implements JdbcType {
 
-  private static final ObjectIdJdbcType INSTANCE = new ObjectIdJdbcType();
+    private static final ObjectIdJdbcType INSTANCE = new ObjectIdJdbcType();
 
-  public static ObjectIdJdbcType getInstance() {
-    return INSTANCE;
-  }
+    public static ObjectIdJdbcType getInstance() {
+        return INSTANCE;
+    }
 
-  @Override
-  public <T> JavaType<T> getJdbcRecommendedJavaTypeMapping(
-      @Nullable final Integer length,
-      @Nullable final Integer scale,
-      final TypeConfiguration typeConfiguration) {
-    Assertions.notNull("typeConfiguration", typeConfiguration);
-    return typeConfiguration.getJavaTypeRegistry().getDescriptor(ObjectId.class);
-  }
+    @Override
+    public <T> JavaType<T> getJdbcRecommendedJavaTypeMapping(
+            @Nullable final Integer length, @Nullable final Integer scale, final TypeConfiguration typeConfiguration) {
+        Assertions.notNull("typeConfiguration", typeConfiguration);
+        return typeConfiguration.getJavaTypeRegistry().getDescriptor(ObjectId.class);
+    }
 
-  @Override
-  public <T> JdbcLiteralFormatter<T> getJdbcLiteralFormatter(final JavaType<T> javaType) {
-    Assertions.notNull("javaType", javaType);
-    return new JdbcLiteralFormatterCharacterData<>(javaType, false);
-  }
+    @Override
+    public <T> JdbcLiteralFormatter<T> getJdbcLiteralFormatter(final JavaType<T> javaType) {
+        Assertions.notNull("javaType", javaType);
+        return new JdbcLiteralFormatterCharacterData<>(javaType, false);
+    }
 
-  @Override
-  public Class<?> getPreferredJavaTypeClass(@Nullable final WrapperOptions options) {
-    return ObjectId.class;
-  }
+    @Override
+    public Class<?> getPreferredJavaTypeClass(@Nullable final WrapperOptions options) {
+        return ObjectId.class;
+    }
 
-  @Override
-  public <X> ValueBinder<X> getBinder(final JavaType<X> javaType) {
-    Assertions.notNull("javaType", javaType);
-    return new BasicBinder<>(javaType, this) {
+    @Override
+    public <X> ValueBinder<X> getBinder(final JavaType<X> javaType) {
+        Assertions.notNull("javaType", javaType);
+        return new BasicBinder<>(javaType, this) {
 
-      @Override
-      protected void doBind(
-          final PreparedStatement st, final X value, final int index, final WrapperOptions options)
-          throws SQLException {
-        st.setObject(index, value, MongoSqlType.OBJECT_ID);
-      }
+            @Override
+            protected void doBind(
+                    final PreparedStatement st, final X value, final int index, final WrapperOptions options)
+                    throws SQLException {
+                st.setObject(index, value, MongoSqlType.OBJECT_ID);
+            }
 
-      @Override
-      protected void doBind(
-          final CallableStatement st,
-          final X value,
-          final String name,
-          final WrapperOptions options)
-          throws SQLException {
-        throw new NotSupportedSQLException();
-      }
-    };
-  }
+            @Override
+            protected void doBind(
+                    final CallableStatement st, final X value, final String name, final WrapperOptions options)
+                    throws SQLException {
+                throw new NotSupportedSQLException();
+            }
+        };
+    }
 
-  @Override
-  public <X> ValueExtractor<X> getExtractor(final JavaType<X> javaType) {
-    Assertions.notNull("javaType", javaType);
-    return new BasicExtractor<>(javaType, this) {
+    @Override
+    public <X> ValueExtractor<X> getExtractor(final JavaType<X> javaType) {
+        Assertions.notNull("javaType", javaType);
+        return new BasicExtractor<>(javaType, this) {
 
-      @Override
-      @Nullable protected X doExtract(final ResultSet rs, final int paramIndex, final WrapperOptions options)
-          throws SQLException {
-        var obj = rs.getObject(paramIndex, BsonObjectId.class);
-        var value = obj == null ? null : obj.getValue();
-        return javaType.getJavaTypeClass().cast(value);
-      }
+            @Override
+            @Nullable protected X doExtract(final ResultSet rs, final int paramIndex, final WrapperOptions options)
+                    throws SQLException {
+                var obj = rs.getObject(paramIndex, BsonObjectId.class);
+                var value = obj == null ? null : obj.getValue();
+                return javaType.getJavaTypeClass().cast(value);
+            }
 
-      @Override
-      protected X doExtract(
-          final CallableStatement statement, final int index, final WrapperOptions options)
-          throws SQLException {
-        throw new NotSupportedSQLException();
-      }
+            @Override
+            protected X doExtract(final CallableStatement statement, final int index, final WrapperOptions options)
+                    throws SQLException {
+                throw new NotSupportedSQLException();
+            }
 
-      @Override
-      protected X doExtract(
-          final CallableStatement statement, final String name, final WrapperOptions options)
-          throws SQLException {
-        throw new NotSupportedSQLException();
-      }
-    };
-  }
+            @Override
+            protected X doExtract(final CallableStatement statement, final String name, final WrapperOptions options)
+                    throws SQLException {
+                throw new NotSupportedSQLException();
+            }
+        };
+    }
 
-  @Override
-  public String getFriendlyName() {
-    return "OBJECT_ID";
-  }
+    @Override
+    public String getFriendlyName() {
+        return "OBJECT_ID";
+    }
 
-  @Override
-  public int getJdbcTypeCode() {
-    return SqlTypes.JAVA_OBJECT;
-  }
+    @Override
+    public int getJdbcTypeCode() {
+        return SqlTypes.JAVA_OBJECT;
+    }
 
-  @Override
-  public String toString() {
-    return "ObjectIdTypeDescriptor(" + getFriendlyName() + ")";
-  }
+    @Override
+    public String toString() {
+        return "ObjectIdTypeDescriptor(" + getFriendlyName() + ")";
+    }
 }
