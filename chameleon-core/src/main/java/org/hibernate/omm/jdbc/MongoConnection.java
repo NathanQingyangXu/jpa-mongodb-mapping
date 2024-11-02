@@ -15,6 +15,7 @@ import org.hibernate.omm.jdbc.adapter.ConnectionAdapter;
 import org.hibernate.omm.jdbc.exception.CommandRunFailSQLException;
 import org.hibernate.omm.jdbc.exception.SimulatedSQLException;
 import org.hibernate.omm.service.CommandRecorder;
+import org.hibernate.omm.service.MongoSession;
 import org.hibernate.omm.type.array.MongoArray;
 
 /**
@@ -85,7 +86,7 @@ public class MongoConnection implements ConnectionAdapter {
     @Override
     public void setAutoCommit(final boolean autoCommit) {
         if (!autoCommit) {
-            this.clientSession.startTransaction();
+          this.clientSession.startTransaction(MongoSession.transactionOptionsThreadLocal.get());
         }
         this.autoCommit = autoCommit;
     }
