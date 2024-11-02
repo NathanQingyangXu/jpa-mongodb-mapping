@@ -9,33 +9,37 @@ import org.hibernate.engine.spi.SessionImplementor;
 
 public class MongoSession extends SessionDelegatorBaseImpl implements SessionImplementor {
 
-    public static ThreadLocal<TransactionOptions> transactionOptionsThreadLocal = new ThreadLocal<>();
+    private ReadConcern readConcern;
+    private WriteConcern writeConcern;
 
-    private ReadConcern defaultTransactionReadConcern;
-    private WriteConcern defaultTransactionWriteConcern;
+    private TransactionOptions transactionOptions;
+
+    public TransactionOptions getTransactionOptions() {
+        return transactionOptions;
+    }
 
     public MongoSession(SessionImplementor delegate) {
         super(delegate);
     }
 
-    public void setDefaultTransactionReadConcern(ReadConcern defaultTransactionReadConcern) {
-        this.defaultTransactionReadConcern = defaultTransactionReadConcern;
+    public void setReadConcern(ReadConcern readConcern) {
+        this.readConcern = readConcern;
     }
 
-    public void setDefaultTransactionWriteConcern(WriteConcern defaultTransactionWriteConcern) {
-        this.defaultTransactionWriteConcern = defaultTransactionWriteConcern;
+    public void setWriteConcern(WriteConcern writeConcern) {
+        this.writeConcern = writeConcern;
     }
 
+    @Override
     public Transaction beginTransaction() {
-        return beginTransaction(defaultTransactionReadConcern, defaultTransactionWriteConcern);
+        return beginTransaction(TransactionOptions.builder()
+                .readConcern(readConcern)
+                .writeConcern(writeConcern)
+                .build());
     }
 
-    public Transaction beginTransaction(ReadConcern transactionReadConcern, WriteConcern transactionWriteConcern) {
-      var transactionOptions = TransactionOptions.builder()
-          .readConcern(transactionReadConcern)
-          .writeConcern(transactionWriteConcern)
-          .build();
-      transactionOptionsThreadLocal.set(transactionOptions);
+    public Transaction beginTransaction(TransactionOptions options) {
+        transactionOptions = options;
         return super.beginTransaction();
     }
 }

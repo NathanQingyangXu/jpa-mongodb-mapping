@@ -1,1 +1,1 @@
-org.hibernate.omm.boot.MongoSessionFactoryBuilderService
+org.hibernate.omm.boot.MongoSessionFactoryBuilderFactory

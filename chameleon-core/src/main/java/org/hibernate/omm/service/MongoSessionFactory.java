@@ -3,56 +3,67 @@ package org.hibernate.omm.service;
 import static org.hibernate.internal.TransactionManagement.manageTransaction;
 
 import com.mongodb.ReadConcern;
+import com.mongodb.TransactionOptions;
 import com.mongodb.WriteConcern;
 import java.util.function.Consumer;
 import org.hibernate.Session;
+import org.hibernate.context.internal.ThreadLocalSessionContext;
 import org.hibernate.engine.spi.SessionFactoryDelegatingImpl;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 
 public class MongoSessionFactory extends SessionFactoryDelegatingImpl implements SessionFactoryImplementor {
 
-  private SessionFactoryImplementor delegate;
-
-  private ReadConcern defaultSessionReadConcern;
-  private WriteConcern defaultSessionWriteConcern;
+  private ReadConcern readConcern;
+  private WriteConcern writeConcern;
 
   public MongoSessionFactory(SessionFactoryImplementor delegate) {
     super(delegate);
   }
 
-  public void setDefaultSessionReadConcern(ReadConcern defaultSessionReadConcern) {
-    this.defaultSessionReadConcern = defaultSessionReadConcern;
+  public void setReadConcern(ReadConcern readConcern) {
+    this.readConcern = readConcern;
   }
 
-  public void setDefaultSessionWriteConcern(WriteConcern defaultSessionWriteConcern) {
-    this.defaultSessionWriteConcern = defaultSessionWriteConcern;
+  public void setWriteConcern(WriteConcern writeConcern) {
+    this.writeConcern = writeConcern;
   }
 
   @Override
   public MongoSession openSession() {
-    return openSession(defaultSessionReadConcern, defaultSessionWriteConcern);
+    return openSession(readConcern, writeConcern);
   }
 
-  public MongoSession openSession(ReadConcern readConcern, WriteConcern writeConcern) {
-    MongoSession mongoSession = new MongoSession(delegate.openSession());
-    mongoSession.setDefaultTransactionReadConcern(defaultSessionReadConcern);
-    mongoSession.setDefaultTransactionWriteConcern(defaultSessionWriteConcern);
-    if (readConcern != null) {
-      mongoSession.setDefaultTransactionReadConcern(readConcern);
-    }
-    if (writeConcern != null) {
-      mongoSession.setDefaultTransactionWriteConcern(writeConcern);
-    }
+  public MongoSession openSession(ReadConcern sessionReadConcern, WriteConcern sessionWriteConcern) {
+    MongoSession mongoSession = new MongoSession(super.openSession());
+    ThreadLocalSessionContext.bind(mongoSession);
+    mongoSession.setReadConcern(sessionReadConcern == null ? readConcern : sessionReadConcern);
+    mongoSession.setWriteConcern(sessionWriteConcern == null ? writeConcern : sessionWriteConcern);
     return mongoSession;
   }
 
   @Override
-  public void inTransaction(Consumer<Session> action) {
-    inTransaction(action, defaultSessionReadConcern, defaultSessionWriteConcern);
+  public void inSession(Consumer<Session> action) {
+    inSession(readConcern, writeConcern, action);
   }
 
-  public void inTransaction(Consumer<Session> action, ReadConcern readConcern, WriteConcern writeConcern) {
-    inSession( session -> manageTransaction( session, ((MongoSession) session).beginTransaction(readConcern, writeConcern), action ) );
+  public void inSession(ReadConcern sessionReadConcern, WriteConcern sessionWriteConcern, Consumer<Session> action) {
+    try ( Session session = openSession(sessionReadConcern, sessionWriteConcern) ) {
+      action.accept( session );
+    }
+  }
+
+  @Override
+  public void inTransaction(Consumer<Session> action) {
+      inTransaction(
+          TransactionOptions.builder()
+              .readConcern(readConcern)
+              .writeConcern(writeConcern)
+              .build(),
+              action);
+  }
+
+  public void inTransaction(TransactionOptions transactionOptions, Consumer<Session> action) {
+    inSession( session -> manageTransaction( session, ((MongoSession) session).beginTransaction(transactionOptions), action ) );
   }
 
 }
