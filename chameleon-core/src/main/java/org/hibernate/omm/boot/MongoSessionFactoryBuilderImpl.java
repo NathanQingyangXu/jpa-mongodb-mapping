@@ -1,6 +1,5 @@
 package org.hibernate.omm.boot;
 
-import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.spi.AbstractDelegatingSessionFactoryBuilderImplementor;
 import org.hibernate.boot.spi.SessionFactoryBuilderImplementor;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
