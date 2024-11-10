@@ -6,6 +6,7 @@ import org.hibernate.query.results.ResultSetMappingSqlSelection;
 import org.hibernate.query.sqm.tree.expression.Conversion;
 import org.hibernate.sql.ast.spi.SqlSelection;
 import org.hibernate.sql.ast.tree.SqlAstNode;
+import org.hibernate.sql.ast.tree.Statement;
 import org.hibernate.sql.ast.tree.delete.DeleteStatement;
 import org.hibernate.sql.ast.tree.expression.*;
 import org.hibernate.sql.ast.tree.from.*;
@@ -20,6 +21,26 @@ import org.hibernate.sql.model.internal.*;
 import org.hibernate.sql.results.internal.SqlSelectionImpl;
 
 public interface MqlAstWalker {
+
+    default AstNode accept(Statement statement) {
+        if (statement instanceof TableInsertStandard tableInsertStandard) {
+            return renderStandardTableInsert(tableInsertStandard);
+        } else if (statement instanceof TableInsertCustomSql tableInsertCustomSql) {
+            return renderCustomTableInsert(tableInsertCustomSql);
+        } else if (statement instanceof TableDeleteStandard tableDeleteStandard) {
+            return renderStandardTableDelete(tableDeleteStandard);
+        } else if (statement instanceof TableDeleteCustomSql tableDeleteCustomSql) {
+            return renderCustomTableDelete(tableDeleteCustomSql);
+        } else if (statement instanceof TableUpdateStandard tableUpdateStandard) {
+            return renderStandardTableUpdate(tableUpdateStandard);
+        } else if (statement instanceof OptionalTableUpdate optionalTableUpdate) {
+            return renderOptionalTableUpdate(optionalTableUpdate);
+        } else if (statement instanceof TableUpdateCustomSql tableUpdateCustomSql) {
+            return renderCustomTableUpdate(tableUpdateCustomSql);
+        } else {
+            throw new IllegalArgumentException("unknown Statement type: " + statement.getClass().getName());
+        }
+    }
 
     default AstNode accept(SqlAstNode sqlAstNode) {
         if (sqlAstNode instanceof SelectStatement selectStatement) {
@@ -158,20 +179,6 @@ public interface MqlAstWalker {
             return renderDuration(duration);
         } else if (sqlAstNode instanceof Conversion conversion) {
             return renderConversion(conversion);
-        } else if (sqlAstNode instanceof TableInsertStandard tableInsertStandard) {
-            return renderStandardTableInsert(tableInsertStandard);
-        } else if (sqlAstNode instanceof TableInsertCustomSql tableInsertCustomSql) {
-            return renderCustomTableInsert(tableInsertCustomSql);
-        } else if (sqlAstNode instanceof TableDeleteStandard tableDeleteStandard) {
-            return renderStandardTableDelete(tableDeleteStandard);
-        } else if (sqlAstNode instanceof TableDeleteCustomSql tableDeleteCustomSql) {
-            return renderCustomTableDelete(tableDeleteCustomSql);
-        } else if (sqlAstNode instanceof TableUpdateStandard tableUpdateStandard) {
-            return renderStandardTableUpdate(tableUpdateStandard);
-        } else if (sqlAstNode instanceof OptionalTableUpdate optionalTableUpdate) {
-            return renderOptionalTableUpdate(optionalTableUpdate);
-        } else if (sqlAstNode instanceof TableUpdateCustomSql tableUpdateCustomSql) {
-            return renderCustomTableUpdate(tableUpdateCustomSql);
         } else if (sqlAstNode instanceof ColumnWriteFragment columnWriteFragment) {
             return renderColumnWriteFragment(columnWriteFragment);
         } else {

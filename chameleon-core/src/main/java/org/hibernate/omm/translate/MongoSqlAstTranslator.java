@@ -1,9 +1,16 @@
 package org.hibernate.omm.translate;
 
+import com.mongodb.lang.Nullable;
+import org.bson.json.JsonWriter;
+import org.hibernate.dialect.Dialect;
+import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.internal.util.collections.CollectionHelper;
 import org.hibernate.internal.util.collections.Stack;
 import org.hibernate.internal.util.collections.StandardStack;
-import org.hibernate.omm.translate.translator.mongoast.AstNode;
+import org.hibernate.omm.translate.translator.AttachmentKeys;
+import org.hibernate.omm.translate.translator.mongoast.*;
+import org.hibernate.omm.translate.translator.mongoast.filters.*;
 import org.hibernate.persister.internal.SqlFragmentPredicate;
 import org.hibernate.query.spi.Limit;
 import org.hibernate.query.spi.QueryOptions;
@@ -11,6 +18,8 @@ import org.hibernate.query.sqm.tree.expression.Conversion;
 import org.hibernate.sql.ast.Clause;
 import org.hibernate.sql.ast.SqlAstNodeRenderingMode;
 import org.hibernate.sql.ast.SqlAstTranslator;
+import org.hibernate.sql.ast.internal.ParameterMarkerStrategyStandard;
+import org.hibernate.sql.ast.spi.ParameterMarkerStrategy;
 import org.hibernate.sql.ast.spi.SqlSelection;
 import org.hibernate.sql.ast.tree.SqlAstNode;
 import org.hibernate.sql.ast.tree.Statement;
@@ -22,16 +31,17 @@ import org.hibernate.sql.ast.tree.predicate.*;
 import org.hibernate.sql.ast.tree.select.*;
 import org.hibernate.sql.ast.tree.update.Assignment;
 import org.hibernate.sql.ast.tree.update.UpdateStatement;
-import org.hibernate.sql.exec.spi.JdbcOperation;
-import org.hibernate.sql.exec.spi.JdbcParameterBindings;
+import org.hibernate.sql.exec.internal.JdbcOperationQueryInsertImpl;
+import org.hibernate.sql.exec.internal.JdbcParametersImpl;
+import org.hibernate.sql.exec.spi.*;
 import org.hibernate.sql.model.ast.ColumnWriteFragment;
 import org.hibernate.sql.model.ast.TableMutation;
 import org.hibernate.sql.model.internal.*;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.io.StringWriter;
+import java.util.*;
 
-public class AbstractMongoSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAstWalker
+public class MongoSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAstWalker
         implements MqlAstWalker, SqlAstTranslator<T> {
 
     private final SessionFactoryImplementor sessionFactory;
@@ -43,14 +53,25 @@ public class AbstractMongoSqlAstTranslator<T extends JdbcOperation> extends Abst
     private final Set<String> affectedTableNames = new HashSet<>();
 
     private JdbcParameterBindings jdbcParameterBindings;
+    private final List<JdbcParameterBinder> parameterBinders = new ArrayList<>();
+    private final JdbcParametersImpl jdbcParameters = new JdbcParametersImpl();
+    private Map<JdbcParameter, JdbcParameterBinding> appliedParameterBindings = Collections.emptyMap();
 
     private Limit limit;
     private JdbcParameter offsetParameter;
     private JdbcParameter limitParameter;
 
-    public AbstractMongoSqlAstTranslator(SessionFactoryImplementor sessionFactory, Statement statement) {
+    private final ParameterMarkerStrategy parameterMarkerStrategy;
+    private final Dialect dialect;
+
+    @Nullable private Predicate additionalWherePredicate;
+
+    public MongoSqlAstTranslator(SessionFactoryImplementor sessionFactory, Statement statement) {
         this.sessionFactory = sessionFactory;
+        final JdbcServices jdbcServices = sessionFactory.getJdbcServices();
+        this.dialect = jdbcServices.getDialect();
         this.statementStack.push(statement);
+        this.parameterMarkerStrategy = jdbcServices.getParameterMarkerStrategy();
     }
 
     @Override
@@ -78,9 +99,21 @@ public class AbstractMongoSqlAstTranslator<T extends JdbcOperation> extends Abst
         return this.clauseStack;
     }
 
+    private void addAdditionalWherePredicate(Predicate predicate) {
+        additionalWherePredicate = Predicate.combinePredicates(additionalWherePredicate, predicate);
+    }
+
     @Override
     public Set<String> getAffectedTableNames() {
         return affectedTableNames;
+    }
+
+    private void registerAffectedTable(NamedTableReference tableReference) {
+        tableReference.applyAffectedTableNames(this::registerAffectedTable);
+    }
+
+    private void registerAffectedTable(String tableExpression) {
+        affectedTableNames.add(tableExpression);
     }
 
     @Override
@@ -121,8 +154,10 @@ public class AbstractMongoSqlAstTranslator<T extends JdbcOperation> extends Abst
         return null; //TODO
     }
 
-    private JdbcOperation translateInsert(InsertSelectStatement statement) {
-        return null; //TODO
+    protected JdbcOperationQueryInsert translateInsert(InsertSelectStatement insertStatement) {
+        var root = renderInsertStatement(insertStatement);
+        return new JdbcOperationQueryInsertImpl(
+                getMql(root), parameterBinders, affectedTableNames, null);
     }
 
     private JdbcOperation translateUpdate(UpdateStatement statement) {
@@ -130,11 +165,18 @@ public class AbstractMongoSqlAstTranslator<T extends JdbcOperation> extends Abst
     }
 
     private JdbcOperation translateDelete(DeleteStatement statement) {
-        return null; //TODO
+        var root = renderDeleteStatement(statement);
+        return new JdbcOperationQueryDelete(getMql(root), parameterBinders, affectedTableNames, null);
     }
 
-    private T translateTableMutation(TableMutation<?> statement) {
-        return null; //TODO
+    protected Map<JdbcParameter, JdbcParameterBinding> getAppliedParameterBindings() {
+        return appliedParameterBindings;
+    }
+
+    private T translateTableMutation(TableMutation<?> mutation) {
+        AstNode root = accept(mutation);
+        //noinspection unchecked
+        return (T) mutation.createMutationOperation(getMql(root), parameterBinders);
     }
 
     protected void cleanup() {
@@ -160,7 +202,7 @@ public class AbstractMongoSqlAstTranslator<T extends JdbcOperation> extends Abst
     }
 
     @Override
-    public AstNode renderInsertStatement(InsertSelectStatement statement) {
+    public AstNode renderInsertStatement(InsertSelectStatement insertStatement) {
         return null;
     }
 
@@ -486,7 +528,15 @@ public class AbstractMongoSqlAstTranslator<T extends JdbcOperation> extends Abst
 
     @Override
     public AstNode renderStandardTableInsert(TableInsertStandard tableInsert) {
-        return null;
+        String collectionName = tableInsert.getMutatingTable().getTableName();
+
+        List<AstElement> elements = new ArrayList<>(tableInsert.getNumberOfValueBindings());
+        tableInsert.forEachValueBinding((columnPosition, columnValueBinding) -> {
+            AstValue value = (AstValue) accept(columnValueBinding.getValueExpression());
+            elements.add(new AstElement(columnValueBinding.getColumnReference().getColumnExpression(), value));
+        });
+
+        return new AstInsertCommand(collectionName, elements);
     }
 
     @Override
@@ -496,7 +546,17 @@ public class AbstractMongoSqlAstTranslator<T extends JdbcOperation> extends Abst
 
     @Override
     public AstNode renderStandardTableDelete(TableDeleteStandard tableDelete) {
-        return null;
+        String collectionName = tableDelete.getMutatingTable().getTableName();
+        List<AstFilter> filters = new ArrayList<>(tableDelete.getNumberOfKeyBindings());
+        tableDelete.forEachKeyBinding((columnPosition, columnValueBinding) -> {
+            AstValue value = (AstValue) accept(columnValueBinding.getValueExpression());
+            filters.add(new AstFieldOperationFilter(
+                    new AstFilterField(
+                            columnValueBinding.getColumnReference().getColumnExpression()),
+                    new AstComparisonFilterOperation(AstComparisonFilterOperator.EQ, value)));
+        });
+
+        return new DeleteCommand(collectionName, new AstAndFilter(filters));
     }
 
     @Override
@@ -506,7 +566,22 @@ public class AbstractMongoSqlAstTranslator<T extends JdbcOperation> extends Abst
 
     @Override
     public AstNode renderStandardTableUpdate(TableUpdateStandard tableUpdate) {
-        return null;
+        String collectionName = tableUpdate.getMutatingTable().getTableName();
+        List<AstFilter> filters = new ArrayList<>(tableUpdate.getNumberOfKeyBindings());
+        tableUpdate.forEachKeyBinding((position,columnValueBinding) -> {
+            AstValue value = (AstValue) accept(columnValueBinding.getValueExpression());
+            filters.add(new AstFieldOperationFilter(
+                    new AstFilterField(
+                            columnValueBinding.getColumnReference().getColumnExpression()),
+                    new AstComparisonFilterOperation(AstComparisonFilterOperator.EQ, value)));
+        });
+        List<AstFieldUpdate> updates = new ArrayList<>(tableUpdate.getNumberOfValueBindings());
+        tableUpdate.forEachValueBinding((columnPosition, columnValueBinding) -> {
+            AstValue value = (AstValue) accept(columnValueBinding.getValueExpression());
+            updates.add(new AstFieldUpdate(
+                    columnValueBinding.getColumnReference().getColumnExpression(), value));
+        });
+        return new UpdateCommand(tableUpdate.getMutatingTable().getTableName(), new AstAndFilter(filters), updates);
     }
 
     @Override
@@ -521,6 +596,23 @@ public class AbstractMongoSqlAstTranslator<T extends JdbcOperation> extends Abst
 
     @Override
     public AstNode renderColumnWriteFragment(ColumnWriteFragment columnWriteFragment) {
-        return null;
+        if (CollectionHelper.isEmpty(columnWriteFragment.getParameters())
+                || ParameterMarkerStrategyStandard.isStandardRenderer(parameterMarkerStrategy)) {
+            throw new UnsupportedOperationException("no parameter unsupported");
+        }
+        if (columnWriteFragment.getParameters().size() > 1) {
+            throw new UnsupportedOperationException("multiple parameters unsupported");
+        }
+        var parameter = columnWriteFragment.getParameters().iterator().next();
+        parameterBinders.add(parameter.getParameterBinder());
+        jdbcParameters.addParameter(parameter);
+        return new AstPlaceholder();
+    }
+
+    private static String getMql(AstNode root) {
+        StringWriter writer = new StringWriter();
+        JsonWriter jsonWriter = new JsonWriter(writer);
+        root.render(jsonWriter);
+        return writer.toString();
     }
 }
