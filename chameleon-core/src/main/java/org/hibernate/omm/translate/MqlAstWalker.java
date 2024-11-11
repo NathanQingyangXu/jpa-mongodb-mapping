@@ -1,8 +1,9 @@
 package org.hibernate.omm.translate;
 
-import org.hibernate.omm.translate.translator.mongoast.AstNode;
 import org.hibernate.persister.internal.SqlFragmentPredicate;
 import org.hibernate.query.results.ResultSetMappingSqlSelection;
+import org.hibernate.query.sqm.sql.internal.BasicValuedPathInterpretation;
+import org.hibernate.query.sqm.sql.internal.SqmParameterInterpretation;
 import org.hibernate.query.sqm.tree.expression.Conversion;
 import org.hibernate.sql.ast.spi.SqlSelection;
 import org.hibernate.sql.ast.tree.SqlAstNode;
@@ -22,7 +23,7 @@ import org.hibernate.sql.results.internal.SqlSelectionImpl;
 
 public interface MqlAstWalker {
 
-    default AstNode accept(Statement statement) {
+    default Object accept(Statement statement) {
         if (statement instanceof TableInsertStandard tableInsertStandard) {
             return renderStandardTableInsert(tableInsertStandard);
         } else if (statement instanceof TableInsertCustomSql tableInsertCustomSql) {
@@ -42,7 +43,7 @@ public interface MqlAstWalker {
         }
     }
 
-    default AstNode accept(SqlAstNode sqlAstNode) {
+    default Object accept(SqlAstNode sqlAstNode) {
         if (sqlAstNode instanceof SelectStatement selectStatement) {
             return renderSelectStatement(selectStatement);
         } else if (sqlAstNode instanceof DeleteStatement deleteStatement) {
@@ -181,162 +182,166 @@ public interface MqlAstWalker {
             return renderConversion(conversion);
         } else if (sqlAstNode instanceof ColumnWriteFragment columnWriteFragment) {
             return renderColumnWriteFragment(columnWriteFragment);
+        } else if (sqlAstNode instanceof BasicValuedPathInterpretation basicValuedPathInterpretation) {
+            return renderColumnReference(basicValuedPathInterpretation.getColumnReference());
+        } else if (sqlAstNode instanceof SqmParameterInterpretation sqmParameterInterpretation) {
+            return accept(sqmParameterInterpretation.getResolvedExpression());
         } else {
             throw new IllegalArgumentException("unknown SqlAstNode type: " + sqlAstNode.getClass().getName());
         }
     }
 
-    AstNode renderSelectStatement(SelectStatement statement);
+    Object renderSelectStatement(SelectStatement statement);
 
-    AstNode renderDeleteStatement(DeleteStatement statement);
+    Object renderDeleteStatement(DeleteStatement statement);
 
-    AstNode renderUpdateStatement(UpdateStatement statement);
+    Object renderUpdateStatement(UpdateStatement statement);
 
-    AstNode renderInsertStatement(InsertSelectStatement statement);
+    Object renderInsertStatement(InsertSelectStatement statement);
 
-    AstNode renderAssignment(Assignment assignment);
+    Object renderAssignment(Assignment assignment);
 
-    AstNode renderQueryGroup(QueryGroup queryGroup);
+    Object renderQueryGroup(QueryGroup queryGroup);
 
-    AstNode renderQuerySpec(QuerySpec querySpec);
+    Object renderQuerySpec(QuerySpec querySpec);
 
-    AstNode renderSortSpecification(SortSpecification sortSpecification);
+    Object renderSortSpecification(SortSpecification sortSpecification);
 
-    AstNode renderOffsetFetchClause(QueryPart queryPart);
+    Object renderOffsetFetchClause(QueryPart queryPart);
 
-    AstNode renderSelectClause(SelectClause selectClause);
+    Object renderSelectClause(SelectClause selectClause);
 
-    AstNode renderSqlSelection(SqlSelection sqlSelection);
+    Object renderSqlSelection(SqlSelection sqlSelection);
 
-    AstNode renderFromClause(FromClause fromClause);
+    Object renderFromClause(FromClause fromClause);
 
-    AstNode renderTableGroup(TableGroup tableGroup);
+    Object renderTableGroup(TableGroup tableGroup);
 
-    AstNode renderTableGroupJoin(TableGroupJoin tableGroupJoin);
+    Object renderTableGroupJoin(TableGroupJoin tableGroupJoin);
 
-    AstNode renderNamedTableReference(NamedTableReference tableReference);
+    Object renderNamedTableReference(NamedTableReference tableReference);
 
-    AstNode renderValuesTableReference(ValuesTableReference tableReference);
+    Object renderValuesTableReference(ValuesTableReference tableReference);
 
-    AstNode renderQueryPartTableReference(QueryPartTableReference tableReference);
+    Object renderQueryPartTableReference(QueryPartTableReference tableReference);
 
-    AstNode renderFunctionTableReference(FunctionTableReference tableReference);
+    Object renderFunctionTableReference(FunctionTableReference tableReference);
 
-    AstNode renderTableReferenceJoin(TableReferenceJoin tableReferenceJoin);
+    Object renderTableReferenceJoin(TableReferenceJoin tableReferenceJoin);
 
-    AstNode renderColumnReference(ColumnReference columnReference);
+    Object renderColumnReference(ColumnReference columnReference);
 
-    AstNode renderNestedColumnReference(NestedColumnReference nestedColumnReference);
+    Object renderNestedColumnReference(NestedColumnReference nestedColumnReference);
 
-    AstNode renderAggregateColumnWriteExpression(AggregateColumnWriteExpression aggregateColumnWriteExpression);
+    Object renderAggregateColumnWriteExpression(AggregateColumnWriteExpression aggregateColumnWriteExpression);
 
-    AstNode renderExtractUnit(ExtractUnit extractUnit);
+    Object renderExtractUnit(ExtractUnit extractUnit);
 
-    AstNode renderFormat(Format format);
+    Object renderFormat(Format format);
 
-    AstNode renderDistinct(Distinct distinct);
+    Object renderDistinct(Distinct distinct);
 
-    AstNode renderOverflow(Overflow overflow);
+    Object renderOverflow(Overflow overflow);
 
-    AstNode renderStar(Star star);
+    Object renderStar(Star star);
 
-    AstNode renderTrimSpecification(TrimSpecification trimSpecification);
+    Object renderTrimSpecification(TrimSpecification trimSpecification);
 
-    AstNode renderCastTarget(CastTarget castTarget);
+    Object renderCastTarget(CastTarget castTarget);
 
-    AstNode renderBinaryArithmeticExpression(BinaryArithmeticExpression arithmeticExpression);
+    Object renderBinaryArithmeticExpression(BinaryArithmeticExpression arithmeticExpression);
 
-    AstNode renderCaseSearchedExpression(CaseSearchedExpression caseSearchedExpression);
+    Object renderCaseSearchedExpression(CaseSearchedExpression caseSearchedExpression);
 
-    AstNode renderCaseSimpleExpression(CaseSimpleExpression caseSimpleExpression);
+    Object renderCaseSimpleExpression(CaseSimpleExpression caseSimpleExpression);
 
-    AstNode renderAny(Any any);
+    Object renderAny(Any any);
 
-    AstNode renderEvery(Every every);
+    Object renderEvery(Every every);
 
-    AstNode renderSummarization(Summarization every);
+    Object renderSummarization(Summarization every);
 
-    <T> AstNode renderOver(Over<T> over);
+    <T> Object renderOver(Over<T> over);
 
-    AstNode renderSelfRenderingExpression(SelfRenderingExpression expression);
+    Object renderSelfRenderingExpression(SelfRenderingExpression expression);
 
-    AstNode renderSqlSelectionExpression(SqlSelectionExpression expression);
+    Object renderSqlSelectionExpression(SqlSelectionExpression expression);
 
-    AstNode renderEntityTypeLiteral(EntityTypeLiteral expression);
+    Object renderEntityTypeLiteral(EntityTypeLiteral expression);
 
-    AstNode renderEmbeddableTypeLiteral(EmbeddableTypeLiteral expression);
+    Object renderEmbeddableTypeLiteral(EmbeddableTypeLiteral expression);
 
-    AstNode renderTuple(SqlTuple tuple);
+    Object renderTuple(SqlTuple tuple);
 
-    AstNode renderCollation(Collation collation);
+    Object renderCollation(Collation collation);
 
-    AstNode renderParameter(JdbcParameter jdbcParameter);
+    Object renderParameter(JdbcParameter jdbcParameter);
 
-    <T> AstNode renderJdbcLiteral(JdbcLiteral<T> jdbcLiteral);
+    <T> Object renderJdbcLiteral(JdbcLiteral<T> jdbcLiteral);
 
-    <T> AstNode renderQueryLiteral(QueryLiteral<T> queryLiteral);
+    <T> Object renderQueryLiteral(QueryLiteral<T> queryLiteral);
 
-    <N extends Number> AstNode renderUnparsedNumericLiteral(UnparsedNumericLiteral<N> literal);
+    <N extends Number> Object renderUnparsedNumericLiteral(UnparsedNumericLiteral<N> literal);
 
-    AstNode renderUnaryOperationExpression(UnaryOperation unaryOperationExpression);
+    Object renderUnaryOperationExpression(UnaryOperation unaryOperationExpression);
 
-    AstNode renderModifiedSubQueryExpression(ModifiedSubQueryExpression expression);
+    Object renderModifiedSubQueryExpression(ModifiedSubQueryExpression expression);
 
-    AstNode renderBooleanExpressionPredicate(BooleanExpressionPredicate booleanExpressionPredicate);
+    Object renderBooleanExpressionPredicate(BooleanExpressionPredicate booleanExpressionPredicate);
 
-    AstNode renderBetweenPredicate(BetweenPredicate betweenPredicate);
+    Object renderBetweenPredicate(BetweenPredicate betweenPredicate);
 
-    AstNode renderFilterPredicate(FilterPredicate filterPredicate);
-    AstNode renderFilterFragmentPredicate(FilterPredicate.FilterFragmentPredicate fragmentPredicate);
-    AstNode renderSqlFragmentPredicate(SqlFragmentPredicate predicate);
+    Object renderFilterPredicate(FilterPredicate filterPredicate);
+    Object renderFilterFragmentPredicate(FilterPredicate.FilterFragmentPredicate fragmentPredicate);
+    Object renderSqlFragmentPredicate(SqlFragmentPredicate predicate);
 
-    AstNode renderGroupedPredicate(GroupedPredicate groupedPredicate);
+    Object renderGroupedPredicate(GroupedPredicate groupedPredicate);
 
-    AstNode renderInListPredicate(InListPredicate inListPredicate);
+    Object renderInListPredicate(InListPredicate inListPredicate);
 
-    AstNode renderInSubQueryPredicate(InSubQueryPredicate inSubQueryPredicate);
+    Object renderInSubQueryPredicate(InSubQueryPredicate inSubQueryPredicate);
 
-    AstNode renderInArrayPredicate(InArrayPredicate inArrayPredicate);
+    Object renderInArrayPredicate(InArrayPredicate inArrayPredicate);
 
-    AstNode renderExistsPredicate(ExistsPredicate existsPredicate);
+    Object renderExistsPredicate(ExistsPredicate existsPredicate);
 
-    AstNode renderJunction(Junction junction);
+    Object renderJunction(Junction junction);
 
-    AstNode renderLikePredicate(LikePredicate likePredicate);
+    Object renderLikePredicate(LikePredicate likePredicate);
 
-    AstNode renderNegatedPredicate(NegatedPredicate negatedPredicate);
+    Object renderNegatedPredicate(NegatedPredicate negatedPredicate);
 
-    AstNode renderNullnessPredicate(NullnessPredicate nullnessPredicate);
+    Object renderNullnessPredicate(NullnessPredicate nullnessPredicate);
 
-    AstNode renderThruthnessPredicate(ThruthnessPredicate predicate);
+    Object renderThruthnessPredicate(ThruthnessPredicate predicate);
 
-    AstNode renderRelationalPredicate(ComparisonPredicate comparisonPredicate);
+    Object renderRelationalPredicate(ComparisonPredicate comparisonPredicate);
 
-    AstNode renderSelfRenderingPredicate(SelfRenderingPredicate selfRenderingPredicate);
+    Object renderSelfRenderingPredicate(SelfRenderingPredicate selfRenderingPredicate);
 
-    AstNode renderDurationUnit(DurationUnit durationUnit);
+    Object renderDurationUnit(DurationUnit durationUnit);
 
-    AstNode renderDuration(Duration duration);
+    Object renderDuration(Duration duration);
 
-    AstNode renderConversion(Conversion conversion);
+    Object renderConversion(Conversion conversion);
 
 
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Model mutations
 
-    AstNode renderStandardTableInsert(TableInsertStandard tableInsert);
+    Object renderStandardTableInsert(TableInsertStandard tableInsert);
 
-    AstNode renderCustomTableInsert(TableInsertCustomSql tableInsert);
+    Object renderCustomTableInsert(TableInsertCustomSql tableInsert);
 
-    AstNode renderStandardTableDelete(TableDeleteStandard tableDelete);
+    Object renderStandardTableDelete(TableDeleteStandard tableDelete);
 
-    AstNode renderCustomTableDelete(TableDeleteCustomSql tableDelete);
+    Object renderCustomTableDelete(TableDeleteCustomSql tableDelete);
 
-    AstNode renderStandardTableUpdate(TableUpdateStandard tableUpdate);
+    Object renderStandardTableUpdate(TableUpdateStandard tableUpdate);
 
-    AstNode renderOptionalTableUpdate(OptionalTableUpdate tableUpdate);
+    Object renderOptionalTableUpdate(OptionalTableUpdate tableUpdate);
 
-    AstNode renderCustomTableUpdate(TableUpdateCustomSql tableUpdate);
+    Object renderCustomTableUpdate(TableUpdateCustomSql tableUpdate);
 
-    AstNode renderColumnWriteFragment(ColumnWriteFragment columnWriteFragment);
+    Object renderColumnWriteFragment(ColumnWriteFragment columnWriteFragment);
 }

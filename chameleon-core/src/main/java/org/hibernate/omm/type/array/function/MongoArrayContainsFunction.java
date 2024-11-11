@@ -1,23 +1,13 @@
 package org.hibernate.omm.type.array.function;
 
-import java.util.List;
 import org.hibernate.dialect.function.array.AbstractArrayContainsFunction;
-import org.hibernate.metamodel.mapping.JdbcMapping;
-import org.hibernate.metamodel.mapping.JdbcMappingContainer;
-import org.hibernate.omm.translate.translator.AbstractBsonTranslator;
-import org.hibernate.omm.translate.translator.Attachment;
-import org.hibernate.omm.translate.translator.AttachmentKeys;
-import org.hibernate.omm.translate.translator.mongoast.AstValue;
-import org.hibernate.omm.translate.translator.mongoast.filters.AstAllFilterOperation;
-import org.hibernate.omm.translate.translator.mongoast.filters.AstFieldOperationFilter;
-import org.hibernate.omm.translate.translator.mongoast.filters.AstFilterField;
 import org.hibernate.query.ReturnableType;
 import org.hibernate.sql.ast.SqlAstTranslator;
 import org.hibernate.sql.ast.spi.SqlAppender;
 import org.hibernate.sql.ast.tree.SqlAstNode;
-import org.hibernate.sql.ast.tree.expression.Expression;
-import org.hibernate.type.BasicPluralType;
 import org.hibernate.type.spi.TypeConfiguration;
+
+import java.util.List;
 
 public class MongoArrayContainsFunction extends AbstractArrayContainsFunction {
 
@@ -31,7 +21,7 @@ public class MongoArrayContainsFunction extends AbstractArrayContainsFunction {
             final List<? extends SqlAstNode> sqlAstArguments,
             final ReturnableType<?> returnType,
             final SqlAstTranslator<?> walker) {
-        final Expression haystackExpression = (Expression) sqlAstArguments.get(0);
+        /*final Expression haystackExpression = (Expression) sqlAstArguments.get(0);
         final Expression needleExpression = (Expression) sqlAstArguments.get(1);
 
         final JdbcMappingContainer needleTypeContainer = needleExpression.getExpressionType();
@@ -56,6 +46,6 @@ public class MongoArrayContainsFunction extends AbstractArrayContainsFunction {
             sqlAppender.append(": ");
             needleExpression.accept(walker);
             sqlAppender.append(" }");
-        }
+        }*/
     }
 }

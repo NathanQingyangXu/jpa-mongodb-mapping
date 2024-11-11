@@ -119,13 +119,13 @@ public class MongoDialect extends Dialect {
         jdbcTypeRegistry.addDescriptor(ObjectIdJdbcType.getInstance());
     }
 
-    @Override
+/*    @Override
     public void initializeFunctionRegistry(final FunctionContributions functionContributions) {
         var functionRegistry = functionContributions.getFunctionRegistry();
         var typeConfiguration = functionContributions.getTypeConfiguration();
         functionRegistry.register("array_contains", new MongoArrayContainsFunction(typeConfiguration));
         functionRegistry.register("array_includes", new MongoArrayIncludesFunction(typeConfiguration));
-    }
+    }*/
 
     @Override
     public AggregateSupport getAggregateSupport() {

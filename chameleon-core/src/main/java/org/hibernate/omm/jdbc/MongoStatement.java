@@ -21,7 +21,6 @@ import org.hibernate.omm.jdbc.exception.NotSupportedSQLException;
 import org.hibernate.omm.jdbc.exception.SimulatedSQLException;
 import org.hibernate.omm.jdbc.exception.StatementClosedSQLException;
 import org.hibernate.omm.service.CommandRecorder;
-import org.hibernate.omm.translate.translator.MQLTranslator;
 import org.hibernate.sql.ast.tree.select.SelectClause;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

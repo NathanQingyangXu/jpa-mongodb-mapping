@@ -1,21 +1,33 @@
 package org.hibernate.omm.translate;
 
 import com.mongodb.lang.Nullable;
+import org.bson.BsonDocument;
 import org.bson.json.JsonWriter;
-import org.hibernate.dialect.Dialect;
 import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.internal.util.collections.CollectionHelper;
 import org.hibernate.internal.util.collections.Stack;
 import org.hibernate.internal.util.collections.StandardStack;
-import org.hibernate.omm.translate.translator.AttachmentKeys;
+import org.hibernate.metamodel.mapping.JdbcMapping;
+import org.hibernate.omm.exception.NotSupportedRuntimeException;
+import org.hibernate.omm.exception.NotYetImplementedException;
+import org.hibernate.omm.translate.translator.CollectionNameAndJoinStages;
 import org.hibernate.omm.translate.translator.mongoast.*;
+import org.hibernate.omm.translate.translator.mongoast.expressions.AstExpression;
+import org.hibernate.omm.translate.translator.mongoast.expressions.AstFieldPathExpression;
+import org.hibernate.omm.translate.translator.mongoast.expressions.AstFormulaExpression;
 import org.hibernate.omm.translate.translator.mongoast.filters.*;
+import org.hibernate.omm.translate.translator.mongoast.stages.*;
+import org.hibernate.omm.util.CollectionUtil;
 import org.hibernate.persister.internal.SqlFragmentPredicate;
+import org.hibernate.query.SortDirection;
 import org.hibernate.query.spi.Limit;
 import org.hibernate.query.spi.QueryOptions;
+import org.hibernate.query.sqm.ComparisonOperator;
+import org.hibernate.query.sqm.sql.internal.SqmParameterInterpretation;
 import org.hibernate.query.sqm.tree.expression.Conversion;
 import org.hibernate.sql.ast.Clause;
+import org.hibernate.sql.ast.SqlAstJoinType;
 import org.hibernate.sql.ast.SqlAstNodeRenderingMode;
 import org.hibernate.sql.ast.SqlAstTranslator;
 import org.hibernate.sql.ast.internal.ParameterMarkerStrategyStandard;
@@ -32,17 +44,63 @@ import org.hibernate.sql.ast.tree.select.*;
 import org.hibernate.sql.ast.tree.update.Assignment;
 import org.hibernate.sql.ast.tree.update.UpdateStatement;
 import org.hibernate.sql.exec.internal.JdbcOperationQueryInsertImpl;
+import org.hibernate.sql.exec.internal.JdbcParameterBindingImpl;
 import org.hibernate.sql.exec.internal.JdbcParametersImpl;
 import org.hibernate.sql.exec.spi.*;
 import org.hibernate.sql.model.ast.ColumnWriteFragment;
 import org.hibernate.sql.model.ast.TableMutation;
 import org.hibernate.sql.model.internal.*;
+import org.hibernate.sql.results.jdbc.spi.JdbcValuesMappingProducer;
+import org.hibernate.type.BasicType;
+import org.hibernate.type.StandardBasicTypes;
+import org.hibernate.type.descriptor.java.JavaType;
 
 import java.io.StringWriter;
 import java.util.*;
 
 public class MongoSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAstWalker
         implements MqlAstWalker, SqlAstTranslator<T> {
+
+    private static class PathTracker {
+        private final Map<String, String> pathByQualifier = new HashMap<>();
+
+        @Nullable
+        private String rootQualifier;
+
+        public void setRootQualifier(final String rootQualifier) {
+            this.rootQualifier = rootQualifier;
+        }
+
+        public @Nullable String getRootQualifier() {
+            return rootQualifier;
+        }
+
+        public void trackPath(final String sourceQualifier, final String targetQualifier) {
+            var sourcePath = pathByQualifier.get(sourceQualifier);
+            if (sourcePath != null) {
+                pathByQualifier.put(targetQualifier, sourcePath + "." + targetQualifier);
+            } else {
+                pathByQualifier.put(targetQualifier, targetQualifier);
+            }
+        }
+
+        public String renderColumnReference(final ColumnReference columnReference) {
+            var path = pathByQualifier.get(columnReference.getQualifier());
+            String result;
+            if (path == null) {
+                if (columnReference.isColumnExpressionFormula()) {
+                    return columnReference.getColumnExpression().replace(columnReference.getQualifier() + ".", "");
+                } else {
+                    result = columnReference.getColumnExpression();
+                }
+            } else {
+                result = path + "." + columnReference.getColumnExpression();
+            }
+            return "$" + result;
+        }
+    }
+
+    private final PathTracker pathTracker = new PathTracker();
 
     private final SessionFactoryImplementor sessionFactory;
 
@@ -62,14 +120,16 @@ public class MongoSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlA
     private JdbcParameter limitParameter;
 
     private final ParameterMarkerStrategy parameterMarkerStrategy;
-    private final Dialect dialect;
 
-    @Nullable private Predicate additionalWherePredicate;
+    @Nullable
+    private Predicate additionalWherePredicate;
+
+    private transient BasicType<Integer> integerType;
+    private transient BasicType<Boolean> booleanType;
 
     public MongoSqlAstTranslator(SessionFactoryImplementor sessionFactory, Statement statement) {
         this.sessionFactory = sessionFactory;
         final JdbcServices jdbcServices = sessionFactory.getJdbcServices();
-        this.dialect = jdbcServices.getDialect();
         this.statementStack.push(statement);
         this.parameterMarkerStrategy = jdbcServices.getParameterMarkerStrategy();
     }
@@ -106,10 +166,6 @@ public class MongoSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlA
     @Override
     public Set<String> getAffectedTableNames() {
         return affectedTableNames;
-    }
-
-    private void registerAffectedTable(NamedTableReference tableReference) {
-        tableReference.applyAffectedTableNames(this::registerAffectedTable);
     }
 
     private void registerAffectedTable(String tableExpression) {
@@ -150,36 +206,204 @@ public class MongoSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlA
         }
     }
 
-    private JdbcOperation translateSelect(SelectStatement statement) {
-        return null; //TODO
+    private JdbcOperation translateSelect(SelectStatement selectStatement) {
+        var root = (AstNode) renderSelectStatement(selectStatement);
+
+        var rowsToSkip = getRowsToSkip(selectStatement, jdbcParameterBindings);
+        return new JdbcOperationQuerySelect(
+                getMql(root),
+                parameterBinders,
+                buildJdbcValuesMappingProducer(selectStatement),
+                affectedTableNames,
+                rowsToSkip,
+                getMaxRows(selectStatement, jdbcParameterBindings, rowsToSkip),
+                appliedParameterBindings,
+                JdbcLockStrategy.NONE,
+                offsetParameter,
+                limitParameter);
     }
 
-    protected JdbcOperationQueryInsert translateInsert(InsertSelectStatement insertStatement) {
-        var root = renderInsertStatement(insertStatement);
-        return new JdbcOperationQueryInsertImpl(
-                getMql(root), parameterBinders, affectedTableNames, null);
+    private JdbcValuesMappingProducer buildJdbcValuesMappingProducer(SelectStatement selectStatement) {
+        return getSessionFactory()
+                .getFastSessionServices()
+                .getJdbcValuesMappingProducerProvider()
+                .buildMappingProducer(selectStatement, getSessionFactory());
+    }
+
+    private int getRowsToSkip(SelectStatement sqlAstSelect, JdbcParameterBindings jdbcParameterBindings) {
+        if (hasLimit()) {
+            if (offsetParameter != null && needsRowsToSkip()) {
+                return interpretExpression(offsetParameter, jdbcParameterBindings);
+            }
+        } else {
+            final Expression offsetClauseExpression =
+                    sqlAstSelect.getQueryPart().getOffsetClauseExpression();
+            if (offsetClauseExpression != null && needsRowsToSkip()) {
+                return interpretExpression(offsetClauseExpression, jdbcParameterBindings);
+            }
+        }
+        return 0;
+    }
+
+    private int getMaxRows(
+            SelectStatement sqlAstSelect, JdbcParameterBindings jdbcParameterBindings, int rowsToSkip) {
+        if (hasLimit()) {
+            if (limitParameter != null && needsMaxRows()) {
+                final Number fetchCount = interpretExpression(limitParameter, jdbcParameterBindings);
+                return rowsToSkip + fetchCount.intValue();
+            }
+        } else {
+            final Expression fetchClauseExpression = sqlAstSelect.getQueryPart().getFetchClauseExpression();
+            if (fetchClauseExpression != null && needsMaxRows()) {
+                final Number fetchCount = interpretExpression(fetchClauseExpression, jdbcParameterBindings);
+                return rowsToSkip + fetchCount.intValue();
+            }
+        }
+        return Integer.MAX_VALUE;
+    }
+
+    private <R> R interpretExpression(Expression expression, JdbcParameterBindings jdbcParameterBindings) {
+        if (expression instanceof Literal) {
+            return (R) ((Literal) expression).getLiteralValue();
+        } else if (expression instanceof JdbcParameter) {
+            if (jdbcParameterBindings == null) {
+                throw new IllegalArgumentException(
+                        "Can't interpret expression because no parameter bindings are available");
+            }
+            return (R) getParameterBindValue((JdbcParameter) expression);
+        } else if (expression instanceof SqmParameterInterpretation) {
+            if (jdbcParameterBindings == null) {
+                throw new IllegalArgumentException(
+                        "Can't interpret expression because no parameter bindings are available");
+            }
+            return (R) getParameterBindValue(
+                    (JdbcParameter) ((SqmParameterInterpretation) expression).getResolvedExpression());
+        }
+        throw new UnsupportedOperationException("Can't interpret expression: " + expression);
+    }
+
+    private void addAppliedParameterBinding(JdbcParameter parameter, JdbcParameterBinding binding) {
+        if (appliedParameterBindings.isEmpty()) {
+            appliedParameterBindings = new IdentityHashMap<>();
+        }
+        if (binding == null) {
+            appliedParameterBindings.put(parameter, null);
+        } else {
+            final JdbcMapping bindType = binding.getBindType();
+            //noinspection unchecked
+            final Object value = ((JavaType<Object>) bindType.getJdbcJavaType())
+                    .getMutabilityPlan()
+                    .deepCopy(binding.getBindValue());
+            appliedParameterBindings.put(parameter, new JdbcParameterBindingImpl(bindType, value));
+        }
+    }
+
+    private Object getParameterBindValue(JdbcParameter parameter) {
+        final JdbcParameterBinding binding;
+        if (parameter == offsetParameter) {
+            binding = new JdbcParameterBindingImpl(getIntegerType(), limit.getFirstRow());
+        } else if (parameter == limitParameter) {
+            binding = new JdbcParameterBindingImpl(getIntegerType(), limit.getMaxRows());
+        } else {
+            binding = jdbcParameterBindings.getBinding(parameter);
+        }
+        addAppliedParameterBinding(parameter, binding);
+        return binding.getBindValue();
+    }
+
+    private BasicType<Integer> getIntegerType() {
+        if (integerType == null) {
+            integerType =
+                    sessionFactory.getTypeConfiguration().getBasicTypeRegistry().resolve(StandardBasicTypes.INTEGER);
+        }
+        return integerType;
+    }
+
+    private BasicType<Boolean> getBooleanType() {
+        if (booleanType == null) {
+            booleanType =
+                    sessionFactory.getTypeConfiguration().getBasicTypeRegistry().resolve(StandardBasicTypes.BOOLEAN);
+        }
+        return booleanType;
+    }
+
+    private boolean hasLimit() {
+        return limit != null && !limit.isEmpty();
+    }
+
+    private boolean needsRowsToSkip() {
+        return false;
+    }
+
+    private boolean needsMaxRows() {
+        return false;
+    }
+
+    private JdbcOperationQueryInsert translateInsert(InsertSelectStatement insertSelectStatement) {
+        var root = (AstNode) renderInsertStatement(insertSelectStatement);
+        return new JdbcOperationQueryInsertImpl(getMql(root), parameterBinders, affectedTableNames, null);
     }
 
     private JdbcOperation translateUpdate(UpdateStatement statement) {
-        return null; //TODO
+        var root = (AstNode) renderUpdateStatementOnly(statement);
+
+        return new JdbcOperationQueryUpdate(
+                getMql(root), parameterBinders, affectedTableNames, appliedParameterBindings);
+
     }
 
-    private JdbcOperation translateDelete(DeleteStatement statement) {
-        var root = renderDeleteStatement(statement);
+    private AstNode renderUpdateStatementOnly(UpdateStatement statement) {
+        if (statement.getFromClause().getRoots().size() > 1) {
+            throw new NotSupportedRuntimeException("update statement with multiple roots not supported");
+        }
+        if (statement.getFromClause().getRoots().get(0).hasRealJoins()) {
+            throw new NotSupportedRuntimeException("update statement with root having real joins not supported");
+        }
+        AstFilter filter = renderWhereClause(statement.getRestriction());
+        List<AstFieldUpdate> updates = renderSetClause(statement.getAssignments());
+        return new UpdateCommand(statement.getTargetTable().getTableExpression(), filter, updates);
+    }
+
+    private List<AstFieldUpdate> renderSetClause(final List<Assignment> assignments) {
+        List<AstFieldUpdate> updates = new ArrayList<>(assignments.size());
+        for (Assignment assignment : assignments) {
+            updates.add(renderSetAssignment(assignment));
+        }
+        return updates;
+    }
+
+    private AstFieldUpdate renderSetAssignment(final Assignment assignment) {
+        final List<ColumnReference> columnReferences =
+                assignment.getAssignable().getColumnReferences();
+        if (columnReferences.size() == 1) {
+            ColumnReference columnReference = columnReferences.get(0);
+            if (columnReference.getQualifier() != null) {
+                // TODO: anything to do here?
+            }
+            final Expression assignedValue = assignment.getAssignedValue();
+            final SqlTuple sqlTuple = SqlTupleContainer.getSqlTuple(assignedValue);
+            if (sqlTuple != null) {
+                throw new NotSupportedRuntimeException();
+            }
+            AstValue value = (AstValue) accept(assignedValue);
+            return new AstFieldUpdate(columnReference.getColumnExpression(), value);
+        } else {
+            throw new NotSupportedRuntimeException();
+        }
+    }
+
+    private JdbcOperation translateDelete(DeleteStatement deleteStatement) {
+        var root = (AstNode) renderDeleteStatement(deleteStatement);
         return new JdbcOperationQueryDelete(getMql(root), parameterBinders, affectedTableNames, null);
     }
 
-    protected Map<JdbcParameter, JdbcParameterBinding> getAppliedParameterBindings() {
-        return appliedParameterBindings;
-    }
-
     private T translateTableMutation(TableMutation<?> mutation) {
-        AstNode root = accept(mutation);
+        AstNode root = (AstNode) accept(mutation);
         //noinspection unchecked
         return (T) mutation.createMutationOperation(getMql(root), parameterBinders);
     }
 
-    protected void cleanup() {
+    private void cleanup() {
         this.jdbcParameterBindings = null;
         this.limit = null;
         this.offsetParameter = null;
@@ -187,177 +411,363 @@ public class MongoSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlA
     }
 
     @Override
-    public AstNode renderSelectStatement(SelectStatement statement) {
+    public Object renderSelectStatement(SelectStatement statement) {
+        if (!statement.getQueryPart().isRoot()) {
+            throw new UnsupportedOperationException("subquery unsupported");
+        }
+        return accept(statement.getQueryPart());
+    }
+
+    @Override
+    public Object renderDeleteStatement(DeleteStatement statement) {
         return null;
     }
 
     @Override
-    public AstNode renderDeleteStatement(DeleteStatement statement) {
+    public Object renderUpdateStatement(UpdateStatement statement) {
         return null;
     }
 
     @Override
-    public AstNode renderUpdateStatement(UpdateStatement statement) {
+    public Object renderInsertStatement(InsertSelectStatement insertStatement) {
         return null;
     }
 
     @Override
-    public AstNode renderInsertStatement(InsertSelectStatement insertStatement) {
+    public Object renderAssignment(Assignment assignment) {
         return null;
     }
 
     @Override
-    public AstNode renderAssignment(Assignment assignment) {
+    public Object renderQueryGroup(QueryGroup queryGroup) {
         return null;
     }
 
     @Override
-    public AstNode renderQueryGroup(QueryGroup queryGroup) {
+    public Object renderQuerySpec(QuerySpec querySpec) {
+        CollectionNameAndJoinStages collectionNameAndJoinStages =
+                (CollectionNameAndJoinStages) renderFromClause(querySpec.getFromClause());
+        List<AstStage> stageList = new ArrayList<>(collectionNameAndJoinStages.joinStages());
+        AstFilter filter = renderWhereClause(querySpec.getWhereClauseRestrictions());
+        stageList.add(new AstMatchStage(filter));
+
+        if (CollectionUtil.isNotEmpty(querySpec.getSortSpecifications())) {
+            stageList.add(new AstSortStage(renderOrderBy(querySpec.getSortSpecifications())));
+        }
+
+        List<AstProjectStageSpecification> projectStageSpecifications = renderSelectClause(querySpec.getSelectClause());
+        stageList.add(new AstProjectStage(projectStageSpecifications));
+
+        AstPipeline pipeline = new AstPipeline(stageList);
+        return new AstAggregationCommand(collectionNameAndJoinStages.collectionName(), pipeline);
+    }
+
+    private AstFilter renderWhereClause(Predicate whereClauseRestrictions) {
+        final boolean existsWhereClauseRestrictions =
+                whereClauseRestrictions != null && !whereClauseRestrictions.isEmpty();
+        if (existsWhereClauseRestrictions) {
+            return (AstFilter) accept(whereClauseRestrictions);
+        } else {
+            return new AstMatchesEverythingFilter();
+        }
+    }
+
+    private List<AstSortField> renderOrderBy(List<SortSpecification> sortSpecifications) {
+        if (sortSpecifications != null && !sortSpecifications.isEmpty()) {
+            List<AstSortField> sortFields = new ArrayList<>(sortSpecifications.size());
+            for (SortSpecification sortSpecification : sortSpecifications) {
+                sortFields.addAll(renderSortSpecification(sortSpecification));
+            }
+            return sortFields;
+        } else {
+            return Collections.emptyList();
+        }
+    }
+
+    @Override
+    public List<AstSortField> renderSortSpecification(SortSpecification sortSpecification) {
+        var sortExpression = sortSpecification.getSortExpression();
+        var sortOrder = sortSpecification.getSortOrder();
+        var sqlTuple = SqlTupleContainer.getSqlTuple(sortExpression);
+        if (sqlTuple != null) {
+            List<AstSortField> sortFields =
+                    new ArrayList<>(sqlTuple.getExpressions().size());
+            for (Expression expression : sqlTuple.getExpressions()) {
+                sortFields.add(renderSortSpecification(expression, sortOrder));
+            }
+            return sortFields;
+        } else {
+            return Collections.singletonList(renderSortSpecification(sortExpression, sortOrder));
+        }
+    }
+
+    private AstSortField renderSortSpecification(Expression sortExpression, SortDirection sortOrder) {
+        var fieldName = (String) accept(sortExpression);
+        AstSortOrder astSortOrder;
+        if (sortOrder == SortDirection.DESCENDING) {
+            astSortOrder = new AstDescendingSortOrder();
+        } else if (sortOrder == SortDirection.ASCENDING) {
+            astSortOrder = new AstAscendingSortOrder();
+        } else {
+            throw new NotYetImplementedException("Unclear if there are any other sort orders");
+        }
+        return new AstSortField(fieldName, astSortOrder);
+    }
+
+    @Override
+    public Object renderOffsetFetchClause(QueryPart querySpec) {
         return null;
     }
 
     @Override
-    public AstNode renderQuerySpec(QuerySpec querySpec) {
+    public List<AstProjectStageSpecification> renderSelectClause(SelectClause selectClause) {
+        final List<SqlSelection> sqlSelections = selectClause.getSqlSelections();
+        final int size = sqlSelections.size();
+        List<AstProjectStageSpecification> projectStageSpecifications = new ArrayList<>(size);
+
+        for (int i = 0; i < size; i++) {
+            final SqlSelection sqlSelection = sqlSelections.get(i);
+            if (sqlSelection.isVirtual()) {
+                continue;
+            }
+            if (sqlSelection.getExpression() instanceof ColumnReference columnReference) {
+                String columnReferenceAsString = pathTracker.renderColumnReference(columnReference);
+                // TODO: checking for $ is a hack, but it will work
+                AstExpression projectionExpression = columnReferenceAsString.startsWith("$")
+                        ? new AstFieldPathExpression(columnReferenceAsString)
+                        : new AstFormulaExpression(BsonDocument.parse(columnReferenceAsString));
+                projectStageSpecifications.add(AstProjectStageSpecification.Set("f" + i, projectionExpression));
+            } else {
+                visitSqlSelection(sqlSelection);
+            }
+        }
+
+        projectStageSpecifications.add(AstProjectStageSpecification.ExcludeId());
+        return projectStageSpecifications;
+    }
+
+    @Override
+    public Object renderSqlSelection(SqlSelection sqlSelection) {
         return null;
     }
 
     @Override
-    public AstNode renderSortSpecification(SortSpecification sortSpecification) {
+    public Object renderFromClause(FromClause fromClause) {
+        if (fromClause == null || fromClause.getRoots().isEmpty()) {
+            throw new NotSupportedRuntimeException("null fromClause or empty root not supported");
+        } else {
+            return renderFromClauseSpaces(fromClause);
+        }
+    }
+
+    private Object renderFromClauseSpaces(final FromClause fromClause) {
+        if (fromClause.getRoots().size() > 1) {
+            throw new NotYetImplementedException();
+        }
+        return renderFromClauseRoot(fromClause.getRoots().get(0));
+    }
+
+    private Object renderFromClauseRoot(final TableGroup root) {
+        String collectionName = (String) accept(root.getPrimaryTableReference());
+        List<AstStage> joinStages = processTableGroupJoins(root);
+        return new CollectionNameAndJoinStages(collectionName, joinStages);
+    }
+
+    private List<AstStage> processTableGroupJoins(final TableGroup source) {
+        if (!source.getTableGroupJoins().isEmpty()) {
+            List<AstStage> stages = new ArrayList<>(source.getTableGroupJoins().size());
+            for (TableGroupJoin tableGroupJoin : source.getTableGroupJoins()) {
+                stages.addAll(renderTableGroupJoin(source, tableGroupJoin));
+            }
+            return stages;
+        } else {
+            return Collections.emptyList();
+        }
+    }
+
+    private List<AstStage> renderTableGroupJoin(final TableGroup source, final TableGroupJoin tableGroupJoin) {
+
+        Predicate predicate = null;
+        if (tableGroupJoin.getPredicate() == null) {
+            if (tableGroupJoin.getJoinType() != SqlAstJoinType.CROSS) {
+                predicate = new BooleanExpressionPredicate(new QueryLiteral<>(true, getBooleanType()));
+            }
+        } else {
+            predicate = tableGroupJoin.getPredicate();
+        }
+        return renderTableGroup(source, tableGroupJoin.getJoinedGroup(), predicate);
+    }
+
+    private List<AstStage> renderTableGroup(
+            final TableGroup source, final TableGroup tableGroup, @Nullable final Predicate predicate) {
+
+        AstLookupStage lookupStage = simulateTableJoining(source, tableGroup, predicate);
+
+        if (!tableGroup.getTableGroupJoins().isEmpty()) {
+            List<AstStage> joinStages = processTableGroupJoins(tableGroup);
+            lookupStage = lookupStage.addPipeline(joinStages);
+        }
+
+        return List.of(
+                lookupStage,
+                new AstUnwindStage(tableGroup.getPrimaryTableReference().getIdentificationVariable()));
+    }
+
+    private AstLookupStage simulateTableJoining(
+            final TableGroup sourceTableGroup, final TableGroup targetTableGroup, @Nullable final Predicate predicate) {
+        if (targetTableGroup.getPrimaryTableReference() instanceof NamedTableReference namedTargetTableReference) {
+            var sourceQualifier = sourceTableGroup.getPrimaryTableReference().getIdentificationVariable();
+
+            if (predicate instanceof ComparisonPredicate comparisonPredicate) {
+                var targetQualifier =
+                        targetTableGroup.getPrimaryTableReference().getIdentificationVariable();
+
+                pathTracker.trackPath(sourceQualifier, targetQualifier);
+
+                ColumnReference sourceColumnReference = null, targetColumnReference = null;
+                var leftHandColumnReference =
+                        comparisonPredicate.getLeftHandExpression().getColumnReference();
+                var rightHandColumnReference =
+                        comparisonPredicate.getRightHandExpression().getColumnReference();
+                if (leftHandColumnReference.getQualifier().equals(targetQualifier)
+                        && rightHandColumnReference.getQualifier().equals(sourceQualifier)) {
+                    targetColumnReference = leftHandColumnReference;
+                    sourceColumnReference = rightHandColumnReference;
+                } else if (leftHandColumnReference.getQualifier().equals(sourceQualifier)
+                        && rightHandColumnReference.getQualifier().equals(targetQualifier)) {
+                    sourceColumnReference = leftHandColumnReference;
+                    targetColumnReference = rightHandColumnReference;
+                }
+                AstLookupStageMatch lookupStageMatch;
+                if (sourceColumnReference != null && targetColumnReference != null) {
+                    lookupStageMatch = new AstLookupStageEqualityMatch(
+                            sourceColumnReference.getColumnExpression(), targetColumnReference.getColumnExpression());
+                } else {
+                    throw new NotYetImplementedException(
+                            "This appears to be untested code, so haven't added MQL AST support yet");
+                }
+                return new AstLookupStage(
+                        namedTargetTableReference.getTableExpression(), targetQualifier, lookupStageMatch, List.of());
+            } else {
+                throw new NotYetImplementedException("currently only comparison predicate supported for table joining");
+            }
+        } else {
+            throw new NotYetImplementedException("currently only NamedTableReference supported for table joining");
+        }
+    }
+
+    @Override
+    public Object renderTableGroup(TableGroup tableGroup) {
         return null;
     }
 
     @Override
-    public AstNode renderOffsetFetchClause(QueryPart querySpec) {
+    public Object renderTableGroupJoin(TableGroupJoin tableGroupJoin) {
         return null;
     }
 
     @Override
-    public AstNode renderSelectClause(SelectClause selectClause) {
+    public String renderNamedTableReference(NamedTableReference tableReference) {
+        return tableReference.getTableExpression();
+    }
+
+    @Override
+    public Object renderValuesTableReference(ValuesTableReference tableReference) {
         return null;
     }
 
     @Override
-    public AstNode renderSqlSelection(SqlSelection sqlSelection) {
+    public Object renderQueryPartTableReference(QueryPartTableReference tableReference) {
         return null;
     }
 
     @Override
-    public AstNode renderFromClause(FromClause fromClause) {
+    public Object renderFunctionTableReference(FunctionTableReference tableReference) {
         return null;
     }
 
     @Override
-    public AstNode renderTableGroup(TableGroup tableGroup) {
+    public Object renderTableReferenceJoin(TableReferenceJoin tableReferenceJoin) {
         return null;
     }
 
     @Override
-    public AstNode renderTableGroupJoin(TableGroupJoin tableGroupJoin) {
+    public String renderColumnReference(ColumnReference columnReference) {
+        return columnReference.getColumnExpression();
+    }
+
+    @Override
+    public Object renderNestedColumnReference(NestedColumnReference nestedColumnReference) {
         return null;
     }
 
     @Override
-    public AstNode renderNamedTableReference(NamedTableReference tableReference) {
+    public Object renderAggregateColumnWriteExpression(AggregateColumnWriteExpression aggregateColumnWriteExpression) {
         return null;
     }
 
     @Override
-    public AstNode renderValuesTableReference(ValuesTableReference tableReference) {
+    public Object renderExtractUnit(ExtractUnit extractUnit) {
         return null;
     }
 
     @Override
-    public AstNode renderQueryPartTableReference(QueryPartTableReference tableReference) {
+    public Object renderFormat(Format format) {
         return null;
     }
 
     @Override
-    public AstNode renderFunctionTableReference(FunctionTableReference tableReference) {
+    public Object renderDistinct(Distinct distinct) {
         return null;
     }
 
     @Override
-    public AstNode renderTableReferenceJoin(TableReferenceJoin tableReferenceJoin) {
+    public Object renderOverflow(Overflow overflow) {
         return null;
     }
 
     @Override
-    public AstNode renderColumnReference(ColumnReference columnReference) {
+    public Object renderStar(Star star) {
         return null;
     }
 
     @Override
-    public AstNode renderNestedColumnReference(NestedColumnReference nestedColumnReference) {
+    public Object renderTrimSpecification(TrimSpecification trimSpecification) {
         return null;
     }
 
     @Override
-    public AstNode renderAggregateColumnWriteExpression(AggregateColumnWriteExpression aggregateColumnWriteExpression) {
+    public Object renderCastTarget(CastTarget castTarget) {
         return null;
     }
 
     @Override
-    public AstNode renderExtractUnit(ExtractUnit extractUnit) {
+    public Object renderBinaryArithmeticExpression(BinaryArithmeticExpression arithmeticExpression) {
         return null;
     }
 
     @Override
-    public AstNode renderFormat(Format format) {
+    public Object renderCaseSearchedExpression(CaseSearchedExpression caseSearchedExpression) {
         return null;
     }
 
     @Override
-    public AstNode renderDistinct(Distinct distinct) {
+    public Object renderCaseSimpleExpression(CaseSimpleExpression caseSimpleExpression) {
         return null;
     }
 
     @Override
-    public AstNode renderOverflow(Overflow overflow) {
+    public Object renderAny(Any any) {
         return null;
     }
 
     @Override
-    public AstNode renderStar(Star star) {
+    public Object renderEvery(Every every) {
         return null;
     }
 
     @Override
-    public AstNode renderTrimSpecification(TrimSpecification trimSpecification) {
-        return null;
-    }
-
-    @Override
-    public AstNode renderCastTarget(CastTarget castTarget) {
-        return null;
-    }
-
-    @Override
-    public AstNode renderBinaryArithmeticExpression(BinaryArithmeticExpression arithmeticExpression) {
-        return null;
-    }
-
-    @Override
-    public AstNode renderCaseSearchedExpression(CaseSearchedExpression caseSearchedExpression) {
-        return null;
-    }
-
-    @Override
-    public AstNode renderCaseSimpleExpression(CaseSimpleExpression caseSimpleExpression) {
-        return null;
-    }
-
-    @Override
-    public AstNode renderAny(Any any) {
-        return null;
-    }
-
-    @Override
-    public AstNode renderEvery(Every every) {
-        return null;
-    }
-
-    @Override
-    public AstNode renderSummarization(Summarization every) {
+    public Object renderSummarization(Summarization every) {
         return null;
     }
 
@@ -367,38 +777,45 @@ public class MongoSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlA
     }
 
     @Override
-    public AstNode renderSelfRenderingExpression(SelfRenderingExpression expression) {
+    public Object renderSelfRenderingExpression(SelfRenderingExpression expression) {
         return null;
     }
 
     @Override
-    public AstNode renderSqlSelectionExpression(SqlSelectionExpression expression) {
+    public Object renderSqlSelectionExpression(SqlSelectionExpression expression) {
         return null;
     }
 
     @Override
-    public AstNode renderEntityTypeLiteral(EntityTypeLiteral expression) {
+    public Object renderEntityTypeLiteral(EntityTypeLiteral expression) {
         return null;
     }
 
     @Override
-    public AstNode renderEmbeddableTypeLiteral(EmbeddableTypeLiteral expression) {
+    public Object renderEmbeddableTypeLiteral(EmbeddableTypeLiteral expression) {
         return null;
     }
 
     @Override
-    public AstNode renderTuple(SqlTuple tuple) {
+    public Object renderTuple(SqlTuple tuple) {
         return null;
     }
 
     @Override
-    public AstNode renderCollation(Collation collation) {
+    public Object renderCollation(Collation collation) {
         return null;
     }
 
     @Override
-    public AstNode renderParameter(JdbcParameter jdbcParameter) {
-        return null;
+    public AstPlaceholder renderParameter(JdbcParameter jdbcParameter) {
+        return renderParameterAsParameter(jdbcParameter);
+    }
+
+
+    private AstPlaceholder renderParameterAsParameter(JdbcParameter jdbcParameter) {
+        parameterBinders.add(jdbcParameter.getParameterBinder());
+        jdbcParameters.addParameter(jdbcParameter);
+        return new AstPlaceholder();
     }
 
     @Override
@@ -417,117 +834,130 @@ public class MongoSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlA
     }
 
     @Override
-    public AstNode renderUnaryOperationExpression(UnaryOperation unaryOperationExpression) {
+    public Object renderUnaryOperationExpression(UnaryOperation unaryOperationExpression) {
         return null;
     }
 
     @Override
-    public AstNode renderModifiedSubQueryExpression(ModifiedSubQueryExpression expression) {
+    public Object renderModifiedSubQueryExpression(ModifiedSubQueryExpression expression) {
         return null;
     }
 
     @Override
-    public AstNode renderBooleanExpressionPredicate(BooleanExpressionPredicate booleanExpressionPredicate) {
+    public Object renderBooleanExpressionPredicate(BooleanExpressionPredicate booleanExpressionPredicate) {
         return null;
     }
 
     @Override
-    public AstNode renderBetweenPredicate(BetweenPredicate betweenPredicate) {
+    public Object renderBetweenPredicate(BetweenPredicate betweenPredicate) {
         return null;
     }
 
     @Override
-    public AstNode renderFilterPredicate(FilterPredicate filterPredicate) {
+    public Object renderFilterPredicate(FilterPredicate filterPredicate) {
         return null;
     }
 
     @Override
-    public AstNode renderFilterFragmentPredicate(FilterPredicate.FilterFragmentPredicate fragmentPredicate) {
+    public Object renderFilterFragmentPredicate(FilterPredicate.FilterFragmentPredicate fragmentPredicate) {
         return null;
     }
 
     @Override
-    public AstNode renderSqlFragmentPredicate(SqlFragmentPredicate predicate) {
+    public Object renderSqlFragmentPredicate(SqlFragmentPredicate predicate) {
         return null;
     }
 
     @Override
-    public AstNode renderGroupedPredicate(GroupedPredicate groupedPredicate) {
+    public Object renderGroupedPredicate(GroupedPredicate groupedPredicate) {
         return null;
     }
 
     @Override
-    public AstNode renderInListPredicate(InListPredicate inListPredicate) {
+    public Object renderInListPredicate(InListPredicate inListPredicate) {
         return null;
     }
 
     @Override
-    public AstNode renderInSubQueryPredicate(InSubQueryPredicate inSubQueryPredicate) {
+    public Object renderInSubQueryPredicate(InSubQueryPredicate inSubQueryPredicate) {
         return null;
     }
 
     @Override
-    public AstNode renderInArrayPredicate(InArrayPredicate inArrayPredicate) {
+    public Object renderInArrayPredicate(InArrayPredicate inArrayPredicate) {
         return null;
     }
 
     @Override
-    public AstNode renderExistsPredicate(ExistsPredicate existsPredicate) {
+    public Object renderExistsPredicate(ExistsPredicate existsPredicate) {
         return null;
     }
 
     @Override
-    public AstNode renderJunction(Junction junction) {
+    public Object renderJunction(Junction junction) {
         return null;
     }
 
     @Override
-    public AstNode renderLikePredicate(LikePredicate likePredicate) {
+    public Object renderLikePredicate(LikePredicate likePredicate) {
         return null;
     }
 
     @Override
-    public AstNode renderNegatedPredicate(NegatedPredicate negatedPredicate) {
+    public Object renderNegatedPredicate(NegatedPredicate negatedPredicate) {
         return null;
     }
 
     @Override
-    public AstNode renderNullnessPredicate(NullnessPredicate nullnessPredicate) {
+    public Object renderNullnessPredicate(NullnessPredicate nullnessPredicate) {
         return null;
     }
 
     @Override
-    public AstNode renderThruthnessPredicate(ThruthnessPredicate predicate) {
+    public Object renderThruthnessPredicate(ThruthnessPredicate predicate) {
         return null;
     }
 
     @Override
-    public AstNode renderRelationalPredicate(ComparisonPredicate comparisonPredicate) {
+    public Object renderRelationalPredicate(ComparisonPredicate comparisonPredicate) {
+        return renderComparisonStandard(
+                comparisonPredicate.getLeftHandExpression(),
+                comparisonPredicate.getOperator(),
+                comparisonPredicate.getRightHandExpression());
+    }
+
+    private AstFieldOperationFilter renderComparisonStandard(
+            final Expression lhs, final ComparisonOperator operator, final Expression rhs) {
+        String fieldName = (String) accept(lhs);
+
+        AstValue value = (AstValue) accept(rhs);
+        return new AstFieldOperationFilter(
+                new AstFilterField(fieldName),
+                new AstComparisonFilterOperation(convertOperator(operator), value));
+    }
+
+    @Override
+    public Object renderSelfRenderingPredicate(SelfRenderingPredicate selfRenderingPredicate) {
         return null;
     }
 
     @Override
-    public AstNode renderSelfRenderingPredicate(SelfRenderingPredicate selfRenderingPredicate) {
+    public Object renderDurationUnit(DurationUnit durationUnit) {
         return null;
     }
 
     @Override
-    public AstNode renderDurationUnit(DurationUnit durationUnit) {
+    public Object renderDuration(Duration duration) {
         return null;
     }
 
     @Override
-    public AstNode renderDuration(Duration duration) {
+    public Object renderConversion(Conversion conversion) {
         return null;
     }
 
     @Override
-    public AstNode renderConversion(Conversion conversion) {
-        return null;
-    }
-
-    @Override
-    public AstNode renderStandardTableInsert(TableInsertStandard tableInsert) {
+    public Object renderStandardTableInsert(TableInsertStandard tableInsert) {
         String collectionName = tableInsert.getMutatingTable().getTableName();
 
         List<AstElement> elements = new ArrayList<>(tableInsert.getNumberOfValueBindings());
@@ -540,19 +970,18 @@ public class MongoSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlA
     }
 
     @Override
-    public AstNode renderCustomTableInsert(TableInsertCustomSql tableInsert) {
+    public Object renderCustomTableInsert(TableInsertCustomSql tableInsert) {
         return null;
     }
 
     @Override
-    public AstNode renderStandardTableDelete(TableDeleteStandard tableDelete) {
+    public Object renderStandardTableDelete(TableDeleteStandard tableDelete) {
         String collectionName = tableDelete.getMutatingTable().getTableName();
         List<AstFilter> filters = new ArrayList<>(tableDelete.getNumberOfKeyBindings());
         tableDelete.forEachKeyBinding((columnPosition, columnValueBinding) -> {
             AstValue value = (AstValue) accept(columnValueBinding.getValueExpression());
             filters.add(new AstFieldOperationFilter(
-                    new AstFilterField(
-                            columnValueBinding.getColumnReference().getColumnExpression()),
+                    new AstFilterField(columnValueBinding.getColumnReference().getColumnExpression()),
                     new AstComparisonFilterOperation(AstComparisonFilterOperator.EQ, value)));
         });
 
@@ -560,42 +989,41 @@ public class MongoSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlA
     }
 
     @Override
-    public AstNode renderCustomTableDelete(TableDeleteCustomSql tableDelete) {
+    public Object renderCustomTableDelete(TableDeleteCustomSql tableDelete) {
         return null;
     }
 
     @Override
-    public AstNode renderStandardTableUpdate(TableUpdateStandard tableUpdate) {
-        String collectionName = tableUpdate.getMutatingTable().getTableName();
+    public Object renderStandardTableUpdate(TableUpdateStandard tableUpdate) {
+        registerAffectedTable(tableUpdate.getMutatingTable().getTableName());
         List<AstFilter> filters = new ArrayList<>(tableUpdate.getNumberOfKeyBindings());
-        tableUpdate.forEachKeyBinding((position,columnValueBinding) -> {
+        tableUpdate.forEachKeyBinding((position, columnValueBinding) -> {
             AstValue value = (AstValue) accept(columnValueBinding.getValueExpression());
             filters.add(new AstFieldOperationFilter(
-                    new AstFilterField(
-                            columnValueBinding.getColumnReference().getColumnExpression()),
+                    new AstFilterField(columnValueBinding.getColumnReference().getColumnExpression()),
                     new AstComparisonFilterOperation(AstComparisonFilterOperator.EQ, value)));
         });
         List<AstFieldUpdate> updates = new ArrayList<>(tableUpdate.getNumberOfValueBindings());
         tableUpdate.forEachValueBinding((columnPosition, columnValueBinding) -> {
             AstValue value = (AstValue) accept(columnValueBinding.getValueExpression());
-            updates.add(new AstFieldUpdate(
-                    columnValueBinding.getColumnReference().getColumnExpression(), value));
+            updates.add(
+                    new AstFieldUpdate(columnValueBinding.getColumnReference().getColumnExpression(), value));
         });
         return new UpdateCommand(tableUpdate.getMutatingTable().getTableName(), new AstAndFilter(filters), updates);
     }
 
     @Override
-    public AstNode renderOptionalTableUpdate(OptionalTableUpdate tableUpdate) {
+    public Object renderOptionalTableUpdate(OptionalTableUpdate tableUpdate) {
         return null;
     }
 
     @Override
-    public AstNode renderCustomTableUpdate(TableUpdateCustomSql tableUpdate) {
+    public Object renderCustomTableUpdate(TableUpdateCustomSql tableUpdate) {
         return null;
     }
 
     @Override
-    public AstNode renderColumnWriteFragment(ColumnWriteFragment columnWriteFragment) {
+    public Object renderColumnWriteFragment(ColumnWriteFragment columnWriteFragment) {
         if (CollectionHelper.isEmpty(columnWriteFragment.getParameters())
                 || ParameterMarkerStrategyStandard.isStandardRenderer(parameterMarkerStrategy)) {
             throw new UnsupportedOperationException("no parameter unsupported");
@@ -614,5 +1042,31 @@ public class MongoSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlA
         JsonWriter jsonWriter = new JsonWriter(writer);
         root.render(jsonWriter);
         return writer.toString();
+    }
+
+    AstComparisonFilterOperator convertOperator(final ComparisonOperator operator) {
+        switch (operator) {
+            case EQUAL -> {
+                return AstComparisonFilterOperator.EQ;
+            }
+            case NOT_EQUAL -> {
+                return AstComparisonFilterOperator.NE;
+            }
+            case LESS_THAN -> {
+                return AstComparisonFilterOperator.LT;
+            }
+            case LESS_THAN_OR_EQUAL -> {
+                return AstComparisonFilterOperator.LTE;
+            }
+            case GREATER_THAN -> {
+                return AstComparisonFilterOperator.GT;
+            }
+            case GREATER_THAN_OR_EQUAL -> {
+                return AstComparisonFilterOperator.GTE;
+            }
+            default -> {
+                throw new NotSupportedRuntimeException();
+            }
+        }
     }
 }
