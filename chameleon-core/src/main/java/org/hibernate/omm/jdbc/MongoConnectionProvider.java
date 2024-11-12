@@ -19,6 +19,7 @@ import org.bson.codecs.configuration.CodecRegistry;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.engine.jdbc.connections.spi.ConnectionProvider;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.omm.service.CommandRecorder;
 import org.hibernate.service.UnknownUnwrapTypeException;
 import org.hibernate.service.spi.Configurable;
@@ -39,6 +40,8 @@ public class MongoConnectionProvider
 
     public @MonotonicNonNull MongoDatabase mongoDatabase;
     private @MonotonicNonNull MongoClient mongoClient;
+
+    private @MonotonicNonNull SessionFactoryImplementor sessionFactory;
 
     @Override
     public void configure(final Map<String, Object> configurationValues) {
@@ -83,7 +86,7 @@ public class MongoConnectionProvider
         }
         ClientSession clientSession = mongoClient.startSession();
         CommandRecorder commandRecorder = serviceRegistry.getService(CommandRecorder.class);
-        return new MongoConnection(mongoDatabase, clientSession, commandRecorder);
+        return new MongoConnection(sessionFactory, mongoDatabase, clientSession, commandRecorder);
     }
 
     @Override
@@ -124,5 +127,9 @@ public class MongoConnectionProvider
         } else {
             return connectionString.substring(startIndex, endIndex);
         }
+    }
+
+    public void setSessionFactory(SessionFactoryImplementor sessionFactory) {
+      this.sessionFactory = sessionFactory;
     }
 }

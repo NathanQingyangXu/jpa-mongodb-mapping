@@ -11,10 +11,12 @@ import java.sql.SQLWarning;
 import java.sql.Statement;
 import java.util.List;
 import org.bson.Document;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.omm.jdbc.adapter.ConnectionAdapter;
 import org.hibernate.omm.jdbc.exception.CommandRunFailSQLException;
 import org.hibernate.omm.jdbc.exception.SimulatedSQLException;
 import org.hibernate.omm.service.CommandRecorder;
+import org.hibernate.omm.service.MongoSession;
 import org.hibernate.omm.type.array.MongoArray;
 
 /**
@@ -28,20 +30,26 @@ public class MongoConnection implements ConnectionAdapter {
 
     private final ClientSession clientSession;
     private final MongoDatabase mongoDatabase;
+    private final SessionFactoryImplementor sessionFactory;
 
-    @Nullable private final CommandRecorder commandRecorder;
+    @Nullable
+    private final CommandRecorder commandRecorder;
 
     private boolean autoCommit = true;
     private boolean closed;
 
-    @Nullable private SQLWarning sqlWarning;
+    @Nullable
+    private SQLWarning sqlWarning;
 
     public MongoConnection(
+            final SessionFactoryImplementor sessionFactory,
             final MongoDatabase mongoDatabase,
             final ClientSession clientSession,
             @Nullable final CommandRecorder commandRecorder) {
+        Assertions.notNull("sessionFactory", sessionFactory);
         Assertions.notNull("mongoDatabase", mongoDatabase);
         Assertions.notNull("clientSession", clientSession);
+        this.sessionFactory = sessionFactory;
         this.clientSession = clientSession;
         this.mongoDatabase = mongoDatabase;
         this.commandRecorder = commandRecorder;
@@ -85,7 +93,13 @@ public class MongoConnection implements ConnectionAdapter {
     @Override
     public void setAutoCommit(final boolean autoCommit) {
         if (!autoCommit) {
-            this.clientSession.startTransaction();
+            var mongoSession = (MongoSession) sessionFactory.getCurrentSession();
+            var transactionOptions = mongoSession.getTransactionOptions();
+            if (transactionOptions == null) {
+                this.clientSession.startTransaction();
+            } else {
+                this.clientSession.startTransaction(transactionOptions);
+            }
         }
         this.autoCommit = autoCommit;
     }
@@ -119,7 +133,8 @@ public class MongoConnection implements ConnectionAdapter {
     }
 
     @Override
-    @Nullable public SQLWarning getWarnings() {
+    @Nullable
+    public SQLWarning getWarnings() {
         return sqlWarning;
     }
 
