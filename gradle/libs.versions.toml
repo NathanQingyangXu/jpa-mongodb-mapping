@@ -15,6 +15,7 @@ google-auto-service = "1.1.1"
 aspectj = "1.9.22.1"
 freefair-aspectj-weaving = "8.10"
 spotless = "6.25.0"
+jakarta-data-api = "1.0.1"
 
 [libraries]
 hibernate-orm-core = { module = "org.hibernate.orm:hibernate-core", version.ref = "hibernate-orm-core" }
@@ -27,6 +28,7 @@ sl4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j-api" }
 spotbugs-annotations = { module = "com.github.spotbugs:spotbugs-annotations", version.ref = "spotbugs-annotations" }
 google-auto-service = { module = "com.google.auto.service:auto-service", version.ref = "google-auto-service" }
 aspectj-rt = { module = "org.aspectj:aspectjrt", version.ref = "aspectj" }
+jakarta-data-api = { module = "jakarta.data:jakarta.data-api", version.ref = "jakarta-data-api" }
 
 [plugins]
 checker-framework = { id = "org.checkerframework", version.ref = "checker-framework" }

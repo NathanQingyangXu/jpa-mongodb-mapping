@@ -28,10 +28,12 @@ dependencies {
     implementation project(':chameleon-annotation-processor')
 
     //implementation project(':hibernate-overlay')
+    implementation libs.jakarta.data.api
     implementation libs.hibernate.orm.core
 
-    // JPA Metamodel Generator (used in JPA Criteria)
-    annotationProcessor libs.hibernate.jpamodelgen
+    testAnnotationProcessor libs.hibernate.jpamodelgen
+    testImplementation libs.hibernate.jpamodelgen
+
 }
 
 java {
